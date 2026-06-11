@@ -1,0 +1,5 @@
+node_modules/
+dist/
+.design-audit/
+.DS_Store
+*.log

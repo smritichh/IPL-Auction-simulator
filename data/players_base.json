@@ -1,0 +1,2324 @@
+[
+  [
+    "Virat Kohli",
+    "Batter",
+    "IND",
+    2.0,
+    19.0,
+    "Marquee",
+    "SET 1 — MARQUEE (M1)"
+  ],
+  [
+    "Jasprit Bumrah",
+    "Bowler",
+    "IND",
+    2.0,
+    18.0,
+    "Marquee",
+    null
+  ],
+  [
+    "Hardik Pandya",
+    "All-rounder",
+    "IND",
+    2.0,
+    16.0,
+    "Marquee",
+    null
+  ],
+  [
+    "Rashid Khan",
+    "Bowler",
+    "AFG",
+    2.0,
+    16.0,
+    "Marquee",
+    null
+  ],
+  [
+    "Rohit Sharma",
+    "Batter",
+    "IND",
+    2.0,
+    15.0,
+    "Marquee",
+    null
+  ],
+  [
+    "Rishabh Pant",
+    "WK",
+    "IND",
+    2.0,
+    15.0,
+    "Marquee",
+    null
+  ],
+  [
+    "Pat Cummins",
+    "Bowler",
+    "AUS",
+    2.0,
+    15.0,
+    "Marquee",
+    "SET 2 — MARQUEE (M2)"
+  ],
+  [
+    "Nicholas Pooran",
+    "WK",
+    "WI",
+    2.0,
+    15.0,
+    "Marquee",
+    null
+  ],
+  [
+    "Suryakumar Yadav",
+    "Batter",
+    "IND",
+    2.0,
+    14.0,
+    "Marquee",
+    null
+  ],
+  [
+    "Ravindra Jadeja",
+    "All-rounder",
+    "IND",
+    2.0,
+    14.0,
+    "Marquee",
+    null
+  ],
+  [
+    "Travis Head",
+    "Batter",
+    "AUS",
+    2.0,
+    14.0,
+    "Marquee",
+    null
+  ],
+  [
+    "Heinrich Klaasen",
+    "WK",
+    "RSA",
+    2.0,
+    14.0,
+    "Marquee",
+    null
+  ],
+  [
+    "Shubman Gill",
+    "Batter",
+    "IND",
+    2.0,
+    12.0,
+    "Star",
+    "SET 3 — CAPPED BATTERS (BA1)"
+  ],
+  [
+    "Yashasvi Jaiswal",
+    "Batter",
+    "IND",
+    2.0,
+    12.0,
+    "Star",
+    null
+  ],
+  [
+    "Ruturaj Gaikwad",
+    "Batter",
+    "IND",
+    2.0,
+    12.0,
+    "Star",
+    null
+  ],
+  [
+    "Shreyas Iyer",
+    "Batter",
+    "IND",
+    2.0,
+    12.0,
+    "Star",
+    null
+  ],
+  [
+    "David Warner",
+    "Batter",
+    "AUS",
+    2.0,
+    10.0,
+    "Star",
+    null
+  ],
+  [
+    "Faf du Plessis",
+    "Batter",
+    "RSA",
+    1.5,
+    10.0,
+    "Star",
+    null
+  ],
+  [
+    "Tristan Stubbs",
+    "Batter",
+    "RSA",
+    1.5,
+    10.0,
+    "Star",
+    null
+  ],
+  [
+    "Devon Conway",
+    "Batter",
+    "NZ",
+    1.5,
+    9.0,
+    "Star",
+    null
+  ],
+  [
+    "Sunil Narine",
+    "All-rounder",
+    "WI",
+    2.0,
+    12.0,
+    "Star",
+    "SET 4 — CAPPED ALL-ROUNDERS (AL1)"
+  ],
+  [
+    "Cameron Green",
+    "All-rounder",
+    "AUS",
+    2.0,
+    12.0,
+    "Star",
+    null
+  ],
+  [
+    "Andre Russell",
+    "All-rounder",
+    "WI",
+    2.0,
+    11.0,
+    "Star",
+    null
+  ],
+  [
+    "Marcus Stoinis",
+    "All-rounder",
+    "AUS",
+    2.0,
+    11.0,
+    "Star",
+    null
+  ],
+  [
+    "Axar Patel",
+    "All-rounder",
+    "IND",
+    2.0,
+    11.0,
+    "Star",
+    null
+  ],
+  [
+    "Glenn Maxwell",
+    "All-rounder",
+    "AUS",
+    2.0,
+    10.0,
+    "Star",
+    null
+  ],
+  [
+    "Mitchell Marsh",
+    "All-rounder",
+    "AUS",
+    1.5,
+    10.0,
+    "Star",
+    null
+  ],
+  [
+    "Washington Sundar",
+    "All-rounder",
+    "IND",
+    1.5,
+    9.0,
+    "Star",
+    null
+  ],
+  [
+    "Jos Buttler",
+    "WK",
+    "ENG",
+    2.0,
+    13.0,
+    "Star",
+    "SET 5 — CAPPED WICKETKEEPERS (WK1)"
+  ],
+  [
+    "KL Rahul",
+    "WK",
+    "IND",
+    2.0,
+    12.0,
+    "Star",
+    null
+  ],
+  [
+    "Quinton de Kock",
+    "WK",
+    "RSA",
+    2.0,
+    11.0,
+    "Star",
+    null
+  ],
+  [
+    "Phil Salt",
+    "WK",
+    "ENG",
+    2.0,
+    11.0,
+    "Star",
+    null
+  ],
+  [
+    "Sanju Samson",
+    "WK",
+    "IND",
+    1.5,
+    8.0,
+    "Star",
+    null
+  ],
+  [
+    "Jonny Bairstow",
+    "WK",
+    "ENG",
+    1.0,
+    7.0,
+    "Established",
+    null
+  ],
+  [
+    "Rahmanullah Gurbaz",
+    "WK",
+    "AFG",
+    1.0,
+    6.0,
+    "Established",
+    null
+  ],
+  [
+    "Abhishek Porel",
+    "WK",
+    "IND",
+    1.0,
+    5.0,
+    "Established",
+    null
+  ],
+  [
+    "Mohammed Shami",
+    "Bowler",
+    "IND",
+    2.0,
+    11.0,
+    "Star",
+    "SET 6 — CAPPED FAST BOWLERS (FA1)"
+  ],
+  [
+    "Jofra Archer",
+    "Bowler",
+    "ENG",
+    2.0,
+    11.0,
+    "Star",
+    null
+  ],
+  [
+    "Kagiso Rabada",
+    "Bowler",
+    "RSA",
+    2.0,
+    11.0,
+    "Star",
+    null
+  ],
+  [
+    "Mohammed Siraj",
+    "Bowler",
+    "IND",
+    1.5,
+    10.0,
+    "Star",
+    null
+  ],
+  [
+    "Arshdeep Singh",
+    "Bowler",
+    "IND",
+    1.5,
+    10.0,
+    "Star",
+    null
+  ],
+  [
+    "Trent Boult",
+    "Bowler",
+    "NZ",
+    1.5,
+    10.0,
+    "Star",
+    null
+  ],
+  [
+    "Anrich Nortje",
+    "Bowler",
+    "RSA",
+    1.5,
+    9.0,
+    "Star",
+    null
+  ],
+  [
+    "Bhuvneshwar Kumar",
+    "Bowler",
+    "IND",
+    1.5,
+    8.0,
+    "Star",
+    null
+  ],
+  [
+    "Kuldeep Yadav",
+    "Bowler",
+    "IND",
+    2.0,
+    11.0,
+    "Star",
+    "SET 7 — CAPPED SPIN BOWLERS (SP1)"
+  ],
+  [
+    "Yuzvendra Chahal",
+    "Bowler",
+    "IND",
+    1.5,
+    9.0,
+    "Star",
+    null
+  ],
+  [
+    "Ravi Bishnoi",
+    "Bowler",
+    "IND",
+    1.0,
+    7.0,
+    "Established",
+    null
+  ],
+  [
+    "Varun Chakravarthy",
+    "Bowler",
+    "IND",
+    1.0,
+    7.0,
+    "Established",
+    null
+  ],
+  [
+    "Maheesh Theekshana",
+    "Bowler",
+    "SL",
+    1.0,
+    6.0,
+    "Established",
+    null
+  ],
+  [
+    "Adam Zampa",
+    "Bowler",
+    "AUS",
+    1.0,
+    6.0,
+    "Established",
+    null
+  ],
+  [
+    "Keshav Maharaj",
+    "Bowler",
+    "RSA",
+    0.75,
+    4.0,
+    "Established",
+    null
+  ],
+  [
+    "Akeal Hosein",
+    "Bowler",
+    "WI",
+    0.75,
+    4.0,
+    "Established",
+    null
+  ],
+  [
+    "Tim David",
+    "Batter",
+    "AUS",
+    1.0,
+    6.0,
+    "Emerging",
+    "SET 8 — UNCAPPED BATTERS (UBA1)"
+  ],
+  [
+    "Jake Fraser-McGurk",
+    "Batter",
+    "AUS",
+    1.0,
+    6.0,
+    "Emerging",
+    null
+  ],
+  [
+    "Jason Roy",
+    "Batter",
+    "ENG",
+    0.75,
+    4.0,
+    "Emerging",
+    null
+  ],
+  [
+    "Finn Allen",
+    "Batter",
+    "NZ",
+    0.75,
+    4.0,
+    "Emerging",
+    null
+  ],
+  [
+    "Angkrish Raghuvanshi",
+    "Batter",
+    "IND",
+    0.5,
+    4.0,
+    "Emerging",
+    null
+  ],
+  [
+    "Nehal Wadhera",
+    "Batter",
+    "IND",
+    0.5,
+    3.0,
+    "Emerging",
+    null
+  ],
+  [
+    "Yashasvi Singh",
+    "Batter",
+    "IND",
+    0.5,
+    3.0,
+    "Emerging",
+    null
+  ],
+  [
+    "Sameer Rizvi",
+    "Batter",
+    "IND",
+    0.5,
+    3.0,
+    "Emerging",
+    null
+  ],
+  [
+    "Ibrahim Zadran",
+    "Batter",
+    "AFG",
+    0.5,
+    3.0,
+    "Emerging",
+    null
+  ],
+  [
+    "Karun Nair",
+    "Batter",
+    "IND",
+    0.5,
+    3.0,
+    "Uncapped",
+    null
+  ],
+  [
+    "Mayank Agarwal",
+    "Batter",
+    "IND",
+    0.5,
+    3.0,
+    "Uncapped",
+    null
+  ],
+  [
+    "Ayush Badoni",
+    "Batter",
+    "IND",
+    0.4,
+    2.5,
+    "Uncapped",
+    null
+  ],
+  [
+    "Vaibhav Suryavanshi",
+    "Batter",
+    "IND",
+    0.3,
+    3.0,
+    "Emerging",
+    null
+  ],
+  [
+    "Priyansh Arya",
+    "Batter",
+    "IND",
+    0.3,
+    2.0,
+    "Uncapped",
+    null
+  ],
+  [
+    "Abhinav Manohar",
+    "Batter",
+    "IND",
+    0.3,
+    2.0,
+    "Uncapped",
+    null
+  ],
+  [
+    "Aniket Verma",
+    "Batter",
+    "IND",
+    0.3,
+    2.0,
+    "Uncapped",
+    null
+  ],
+  [
+    "Anmolpreet Singh",
+    "Batter",
+    "IND",
+    0.3,
+    1.5,
+    "Uncapped",
+    null
+  ],
+  [
+    "Sai Sudharsan B",
+    "Batter",
+    "IND",
+    0.3,
+    1.5,
+    "Uncapped",
+    null
+  ],
+  [
+    "Madhav Tiwari",
+    "Batter",
+    "IND",
+    0.3,
+    1.5,
+    "Uncapped",
+    null
+  ],
+  [
+    "Atharva Taide",
+    "Batter",
+    "IND",
+    0.3,
+    1.5,
+    "Uncapped",
+    null
+  ],
+  [
+    "Sediqullah Atal",
+    "Batter",
+    "AFG",
+    0.3,
+    1.5,
+    "Uncapped",
+    null
+  ],
+  [
+    "Shaik Rasheed",
+    "Batter",
+    "IND",
+    0.3,
+    1.5,
+    "Uncapped",
+    null
+  ],
+  [
+    "Ricky Bhui",
+    "Batter",
+    "IND",
+    0.3,
+    1.5,
+    "Uncapped",
+    null
+  ],
+  [
+    "Sachin Baby",
+    "Batter",
+    "IND",
+    0.3,
+    1.5,
+    "Uncapped",
+    null
+  ],
+  [
+    "Himmat Singh",
+    "Batter",
+    "IND",
+    0.3,
+    1.5,
+    "Uncapped",
+    null
+  ],
+  [
+    "Harnoor Singh",
+    "Batter",
+    "IND",
+    0.3,
+    1.5,
+    "Uncapped",
+    null
+  ],
+  [
+    "Swastik Chikara",
+    "Batter",
+    "IND",
+    0.3,
+    1.5,
+    "Uncapped",
+    null
+  ],
+  [
+    "Abdul Bazith",
+    "Batter",
+    "IND",
+    0.3,
+    1.5,
+    "Uncapped",
+    null
+  ],
+  [
+    "Will Jacks",
+    "All-rounder",
+    "ENG",
+    1.0,
+    6.0,
+    "Emerging",
+    "SET 9 — UNCAPPED ALL-ROUNDERS (UAL1)"
+  ],
+  [
+    "Daryl Mitchell",
+    "All-rounder",
+    "NZ",
+    1.0,
+    6.0,
+    "Emerging",
+    null
+  ],
+  [
+    "Glenn Phillips",
+    "All-rounder",
+    "NZ",
+    1.0,
+    6.0,
+    "Emerging",
+    null
+  ],
+  [
+    "Azmatullah Omarzai",
+    "All-rounder",
+    "AFG",
+    1.0,
+    6.0,
+    "Emerging",
+    null
+  ],
+  [
+    "Riyan Parag",
+    "All-rounder",
+    "IND",
+    1.0,
+    5.0,
+    "Emerging",
+    null
+  ],
+  [
+    "Nitish Kumar Reddy",
+    "All-rounder",
+    "IND",
+    0.75,
+    5.0,
+    "Emerging",
+    null
+  ],
+  [
+    "Sherfane Rutherford",
+    "All-rounder",
+    "WI",
+    0.75,
+    5.0,
+    "Emerging",
+    null
+  ],
+  [
+    "Tom Curran",
+    "All-rounder",
+    "ENG",
+    0.75,
+    4.0,
+    "Emerging",
+    null
+  ],
+  [
+    "Shakib Al Hasan",
+    "All-rounder",
+    "BAN",
+    0.75,
+    4.0,
+    "Emerging",
+    null
+  ],
+  [
+    "Shahrukh Khan",
+    "All-rounder",
+    "IND",
+    0.75,
+    4.0,
+    "Emerging",
+    null
+  ],
+  [
+    "Shashank Singh",
+    "All-rounder",
+    "IND",
+    0.5,
+    4.0,
+    "Emerging",
+    null
+  ],
+  [
+    "Abdul Samad",
+    "All-rounder",
+    "IND",
+    0.5,
+    4.0,
+    "Emerging",
+    null
+  ],
+  [
+    "Ramandeep Singh",
+    "All-rounder",
+    "IND",
+    0.5,
+    4.0,
+    "Emerging",
+    null
+  ],
+  [
+    "Dunith Wellalage",
+    "All-rounder",
+    "SL",
+    0.5,
+    4.0,
+    "Emerging",
+    null
+  ],
+  [
+    "Ashutosh Sharma",
+    "All-rounder",
+    "IND",
+    0.4,
+    3.0,
+    "Uncapped",
+    null
+  ],
+  [
+    "Shahbaz Ahmed",
+    "All-rounder",
+    "IND",
+    0.4,
+    2.5,
+    "Uncapped",
+    null
+  ],
+  [
+    "Mahipal Lomror",
+    "All-rounder",
+    "IND",
+    0.4,
+    2.5,
+    "Uncapped",
+    null
+  ],
+  [
+    "Naman Dhir",
+    "All-rounder",
+    "IND",
+    0.3,
+    2.5,
+    "Uncapped",
+    null
+  ],
+  [
+    "Vipraj Nigam",
+    "All-rounder",
+    "IND",
+    0.3,
+    2.0,
+    "Uncapped",
+    null
+  ],
+  [
+    "Darshan Nalkande",
+    "All-rounder",
+    "IND",
+    0.3,
+    2.0,
+    "Uncapped",
+    null
+  ],
+  [
+    "Raj Angad Bawa",
+    "All-rounder",
+    "IND",
+    0.3,
+    2.0,
+    "Uncapped",
+    null
+  ],
+  [
+    "Rajvardhan Hangargekar",
+    "All-rounder",
+    "IND",
+    0.3,
+    2.0,
+    "Uncapped",
+    null
+  ],
+  [
+    "Anukul Roy",
+    "All-rounder",
+    "IND",
+    0.3,
+    2.0,
+    "Uncapped",
+    null
+  ],
+  [
+    "Jalaj Saxena",
+    "All-rounder",
+    "IND",
+    0.3,
+    2.0,
+    "Uncapped",
+    null
+  ],
+  [
+    "Jayant Yadav",
+    "All-rounder",
+    "IND",
+    0.3,
+    2.0,
+    "Uncapped",
+    null
+  ],
+  [
+    "Lalit Yadav",
+    "All-rounder",
+    "IND",
+    0.3,
+    2.0,
+    "Uncapped",
+    null
+  ],
+  [
+    "Manav Suthar",
+    "All-rounder",
+    "IND",
+    0.3,
+    1.5,
+    "Uncapped",
+    null
+  ],
+  [
+    "Sumit Kumar",
+    "All-rounder",
+    "IND",
+    0.3,
+    1.5,
+    "Uncapped",
+    null
+  ],
+  [
+    "Nishant Sindhu",
+    "All-rounder",
+    "IND",
+    0.3,
+    1.5,
+    "Uncapped",
+    null
+  ],
+  [
+    "Swapnil Singh",
+    "All-rounder",
+    "IND",
+    0.3,
+    1.5,
+    "Uncapped",
+    null
+  ],
+  [
+    "Arshin Kulkarni",
+    "All-rounder",
+    "IND",
+    0.3,
+    1.5,
+    "Uncapped",
+    null
+  ],
+  [
+    "Saurabh Kumar",
+    "All-rounder",
+    "IND",
+    0.3,
+    1.5,
+    "Uncapped",
+    null
+  ],
+  [
+    "Suryansh Shedge",
+    "All-rounder",
+    "IND",
+    0.3,
+    1.5,
+    "Uncapped",
+    null
+  ],
+  [
+    "Prerak Mankad",
+    "All-rounder",
+    "IND",
+    0.3,
+    1.5,
+    "Uncapped",
+    null
+  ],
+  [
+    "Mohit Rathee",
+    "All-rounder",
+    "IND",
+    0.3,
+    1.5,
+    "Uncapped",
+    null
+  ],
+  [
+    "Ishan Kishan",
+    "WK",
+    "IND",
+    1.0,
+    6.0,
+    "Emerging",
+    "SET 10 — UNCAPPED WICKETKEEPERS (UWK1)"
+  ],
+  [
+    "Dhruv Jurel",
+    "WK",
+    "IND",
+    0.75,
+    5.0,
+    "Emerging",
+    null
+  ],
+  [
+    "Jitesh Sharma",
+    "WK",
+    "IND",
+    0.75,
+    4.0,
+    "Emerging",
+    null
+  ],
+  [
+    "Matthew Wade",
+    "WK",
+    "AUS",
+    0.75,
+    4.0,
+    "Emerging",
+    null
+  ],
+  [
+    "Kusal Mendis",
+    "WK",
+    "SL",
+    0.75,
+    4.0,
+    "Emerging",
+    null
+  ],
+  [
+    "Shai Hope",
+    "WK",
+    "WI",
+    0.75,
+    4.0,
+    "Emerging",
+    null
+  ],
+  [
+    "Litton Das",
+    "WK",
+    "BAN",
+    0.5,
+    3.0,
+    "Emerging",
+    null
+  ],
+  [
+    "Donovan Ferreira",
+    "WK",
+    "RSA",
+    0.5,
+    3.0,
+    "Emerging",
+    null
+  ],
+  [
+    "Prabhsimran Singh",
+    "WK",
+    "IND",
+    0.4,
+    3.0,
+    "Uncapped",
+    null
+  ],
+  [
+    "Anuj Rawat",
+    "WK",
+    "IND",
+    0.3,
+    2.0,
+    "Uncapped",
+    null
+  ],
+  [
+    "N Jagadeesan",
+    "WK",
+    "IND",
+    0.3,
+    2.0,
+    "Uncapped",
+    null
+  ],
+  [
+    "Robin Minz",
+    "WK",
+    "IND",
+    0.3,
+    2.0,
+    "Uncapped",
+    null
+  ],
+  [
+    "Kumar Kushagra",
+    "WK",
+    "IND",
+    0.3,
+    2.0,
+    "Uncapped",
+    null
+  ],
+  [
+    "Vishnu Vinod",
+    "WK",
+    "IND",
+    0.3,
+    1.5,
+    "Uncapped",
+    null
+  ],
+  [
+    "Aryan Juyal",
+    "WK",
+    "IND",
+    0.3,
+    1.5,
+    "Uncapped",
+    null
+  ],
+  [
+    "Upendra Yadav",
+    "WK",
+    "IND",
+    0.3,
+    1.5,
+    "Uncapped",
+    null
+  ],
+  [
+    "Luvnith Sisodia",
+    "WK",
+    "IND",
+    0.3,
+    1.5,
+    "Uncapped",
+    null
+  ],
+  [
+    "Mayank Yadav",
+    "Bowler",
+    "IND",
+    1.0,
+    6.0,
+    "Emerging",
+    "SET 11 — UNCAPPED FAST BOWLERS (UFA1)"
+  ],
+  [
+    "Spencer Johnson",
+    "Bowler",
+    "AUS",
+    1.0,
+    5.0,
+    "Emerging",
+    null
+  ],
+  [
+    "Mustafizur Rahman",
+    "Bowler",
+    "BAN",
+    1.0,
+    5.0,
+    "Emerging",
+    null
+  ],
+  [
+    "Harshit Rana",
+    "Bowler",
+    "IND",
+    0.75,
+    5.0,
+    "Emerging",
+    null
+  ],
+  [
+    "Fazalhaq Farooqi",
+    "Bowler",
+    "AFG",
+    0.75,
+    5.0,
+    "Emerging",
+    null
+  ],
+  [
+    "Alzarri Joseph",
+    "Bowler",
+    "WI",
+    0.75,
+    5.0,
+    "Emerging",
+    null
+  ],
+  [
+    "Yash Dayal",
+    "Bowler",
+    "IND",
+    0.75,
+    4.0,
+    "Emerging",
+    null
+  ],
+  [
+    "Mohsin Khan",
+    "Bowler",
+    "IND",
+    0.75,
+    4.0,
+    "Emerging",
+    null
+  ],
+  [
+    "Reece Topley",
+    "Bowler",
+    "ENG",
+    0.75,
+    4.0,
+    "Emerging",
+    null
+  ],
+  [
+    "Nathan Ellis",
+    "Bowler",
+    "AUS",
+    0.75,
+    4.0,
+    "Emerging",
+    null
+  ],
+  [
+    "Lungi Ngidi",
+    "Bowler",
+    "RSA",
+    0.75,
+    4.0,
+    "Emerging",
+    null
+  ],
+  [
+    "Tushar Deshpande",
+    "Bowler",
+    "IND",
+    0.5,
+    4.0,
+    "Emerging",
+    null
+  ],
+  [
+    "Akash Madhwal",
+    "Bowler",
+    "IND",
+    0.5,
+    4.0,
+    "Emerging",
+    null
+  ],
+  [
+    "Vyshak Vijaykumar",
+    "Bowler",
+    "IND",
+    0.5,
+    3.0,
+    "Emerging",
+    null
+  ],
+  [
+    "Adam Milne",
+    "Bowler",
+    "NZ",
+    0.5,
+    3.0,
+    "Emerging",
+    null
+  ],
+  [
+    "Ottneil Baartman",
+    "Bowler",
+    "RSA",
+    0.5,
+    3.0,
+    "Emerging",
+    null
+  ],
+  [
+    "Dushmantha Chameera",
+    "Bowler",
+    "SL",
+    0.5,
+    3.0,
+    "Emerging",
+    null
+  ],
+  [
+    "Obed McCoy",
+    "Bowler",
+    "WI",
+    0.5,
+    3.0,
+    "Emerging",
+    null
+  ],
+  [
+    "Akash Deep",
+    "Bowler",
+    "IND",
+    0.5,
+    3.0,
+    "Uncapped",
+    null
+  ],
+  [
+    "Shivam Mavi",
+    "Bowler",
+    "IND",
+    0.5,
+    3.0,
+    "Emerging",
+    null
+  ],
+  [
+    "Anshul Kamboj",
+    "Bowler",
+    "IND",
+    0.5,
+    3.0,
+    "Emerging",
+    null
+  ],
+  [
+    "Vaibhav Arora",
+    "Bowler",
+    "IND",
+    0.5,
+    3.0,
+    "Emerging",
+    null
+  ],
+  [
+    "Yash Thakur",
+    "Bowler",
+    "IND",
+    0.4,
+    2.5,
+    "Uncapped",
+    null
+  ],
+  [
+    "Kartik Tyagi",
+    "Bowler",
+    "IND",
+    0.4,
+    2.5,
+    "Uncapped",
+    null
+  ],
+  [
+    "Rasikh Salam",
+    "Bowler",
+    "IND",
+    0.3,
+    2.0,
+    "Uncapped",
+    null
+  ],
+  [
+    "Vijaykumar Vyshak",
+    "Bowler",
+    "IND",
+    0.3,
+    2.0,
+    "Uncapped",
+    null
+  ],
+  [
+    "Mukesh Choudhary",
+    "Bowler",
+    "IND",
+    0.3,
+    2.0,
+    "Uncapped",
+    null
+  ],
+  [
+    "Kuldeep Sen",
+    "Bowler",
+    "IND",
+    0.3,
+    2.0,
+    "Uncapped",
+    null
+  ],
+  [
+    "Prince Yadav",
+    "Bowler",
+    "IND",
+    0.3,
+    2.0,
+    "Uncapped",
+    null
+  ],
+  [
+    "Ashwani Kumar",
+    "Bowler",
+    "IND",
+    0.3,
+    2.0,
+    "Uncapped",
+    null
+  ],
+  [
+    "Chetan Sakariya",
+    "Bowler",
+    "IND",
+    0.3,
+    2.0,
+    "Uncapped",
+    null
+  ],
+  [
+    "Basil Thampi",
+    "Bowler",
+    "IND",
+    0.3,
+    2.0,
+    "Uncapped",
+    null
+  ],
+  [
+    "Simarjeet Singh",
+    "Bowler",
+    "IND",
+    0.3,
+    1.5,
+    "Uncapped",
+    null
+  ],
+  [
+    "Vidwath Kaverappa",
+    "Bowler",
+    "IND",
+    0.3,
+    1.5,
+    "Uncapped",
+    null
+  ],
+  [
+    "Yudhvir Singh",
+    "Bowler",
+    "IND",
+    0.3,
+    1.5,
+    "Uncapped",
+    null
+  ],
+  [
+    "Gurnoor Brar",
+    "Bowler",
+    "IND",
+    0.3,
+    1.5,
+    "Uncapped",
+    null
+  ],
+  [
+    "Akash Singh",
+    "Bowler",
+    "IND",
+    0.3,
+    1.5,
+    "Uncapped",
+    null
+  ],
+  [
+    "Sandeep Warrier",
+    "Bowler",
+    "IND",
+    0.3,
+    1.5,
+    "Uncapped",
+    null
+  ],
+  [
+    "Akash Vasisht",
+    "Bowler",
+    "IND",
+    0.3,
+    1.5,
+    "Uncapped",
+    null
+  ],
+  [
+    "Noor Ahmad",
+    "Bowler",
+    "AFG",
+    1.0,
+    6.0,
+    "Emerging",
+    "SET 12 — UNCAPPED SPIN BOWLERS (USP1)"
+  ],
+  [
+    "Tabraiz Shamsi",
+    "Bowler",
+    "RSA",
+    0.75,
+    4.0,
+    "Emerging",
+    null
+  ],
+  [
+    "Karn Sharma",
+    "Bowler",
+    "IND",
+    0.5,
+    3.0,
+    "Emerging",
+    null
+  ],
+  [
+    "Mayank Markande",
+    "Bowler",
+    "IND",
+    0.5,
+    3.0,
+    "Emerging",
+    null
+  ],
+  [
+    "Suyash Sharma",
+    "Bowler",
+    "IND",
+    0.4,
+    2.5,
+    "Uncapped",
+    null
+  ],
+  [
+    "Allah Ghazanfar",
+    "Bowler",
+    "AFG",
+    0.4,
+    2.5,
+    "Uncapped",
+    null
+  ],
+  [
+    "Kumar Kartikeya",
+    "Bowler",
+    "IND",
+    0.3,
+    2.0,
+    "Uncapped",
+    null
+  ],
+  [
+    "Shreyas Gopal",
+    "Bowler",
+    "IND",
+    0.3,
+    2.0,
+    "Uncapped",
+    null
+  ],
+  [
+    "Manimaran Siddharth",
+    "Bowler",
+    "IND",
+    0.3,
+    2.0,
+    "Uncapped",
+    null
+  ],
+  [
+    "Vignesh Puthur",
+    "Bowler",
+    "IND",
+    0.3,
+    2.0,
+    "Uncapped",
+    null
+  ],
+  [
+    "KC Cariappa",
+    "Bowler",
+    "IND",
+    0.3,
+    1.5,
+    "Uncapped",
+    null
+  ],
+  [
+    "Rinku Singh",
+    "Batter",
+    "IND",
+    1.5,
+    8.0,
+    "Established",
+    "SET 13 — CAPPED BATTERS ROUND 2 (BA2)"
+  ],
+  [
+    "Tilak Varma",
+    "Batter",
+    "IND",
+    1.5,
+    8.0,
+    "Established",
+    null
+  ],
+  [
+    "Shimron Hetmyer",
+    "Batter",
+    "WI",
+    1.5,
+    8.0,
+    "Established",
+    null
+  ],
+  [
+    "Abhishek Sharma",
+    "Batter",
+    "IND",
+    1.0,
+    8.0,
+    "Established",
+    null
+  ],
+  [
+    "Sai Sudharsan",
+    "Batter",
+    "IND",
+    1.0,
+    7.0,
+    "Established",
+    null
+  ],
+  [
+    "Rajat Patidar",
+    "Batter",
+    "IND",
+    1.0,
+    7.0,
+    "Established",
+    null
+  ],
+  [
+    "Devdutt Padikkal",
+    "Batter",
+    "IND",
+    1.0,
+    6.0,
+    "Established",
+    null
+  ],
+  [
+    "Rovman Powell",
+    "Batter",
+    "WI",
+    1.0,
+    6.0,
+    "Established",
+    null
+  ],
+  [
+    "Kane Williamson",
+    "Batter",
+    "NZ",
+    1.0,
+    6.0,
+    "Established",
+    null
+  ],
+  [
+    "Steve Smith",
+    "Batter",
+    "AUS",
+    1.0,
+    6.0,
+    "Established",
+    null
+  ],
+  [
+    "Aiden Markram",
+    "Batter",
+    "RSA",
+    1.0,
+    6.0,
+    "Established",
+    null
+  ],
+  [
+    "David Miller",
+    "Batter",
+    "RSA",
+    1.0,
+    6.0,
+    "Established",
+    null
+  ],
+  [
+    "Ajinkya Rahane",
+    "Batter",
+    "IND",
+    1.0,
+    5.0,
+    "Established",
+    null
+  ],
+  [
+    "Shikhar Dhawan",
+    "Batter",
+    "IND",
+    1.0,
+    5.0,
+    "Established",
+    null
+  ],
+  [
+    "Manish Pandey",
+    "Batter",
+    "IND",
+    1.0,
+    5.0,
+    "Established",
+    null
+  ],
+  [
+    "Prithvi Shaw",
+    "Batter",
+    "IND",
+    1.0,
+    5.0,
+    "Established",
+    null
+  ],
+  [
+    "Rahul Tripathi",
+    "Batter",
+    "IND",
+    0.75,
+    5.0,
+    "Established",
+    null
+  ],
+  [
+    "Reeza Hendricks",
+    "Batter",
+    "RSA",
+    0.75,
+    4.0,
+    "Established",
+    null
+  ],
+  [
+    "Brandon King",
+    "Batter",
+    "WI",
+    0.75,
+    4.0,
+    "Established",
+    null
+  ],
+  [
+    "Ben Duckett",
+    "Batter",
+    "ENG",
+    0.75,
+    4.0,
+    "Established",
+    null
+  ],
+  [
+    "Liam Livingstone",
+    "All-rounder",
+    "ENG",
+    2.0,
+    10.0,
+    "Star",
+    "SET 14 — CAPPED ALL-ROUNDERS ROUND 2 (AL2)"
+  ],
+  [
+    "Sam Curran",
+    "All-rounder",
+    "ENG",
+    2.0,
+    10.0,
+    "Star",
+    null
+  ],
+  [
+    "Mitchell Santner",
+    "All-rounder",
+    "NZ",
+    1.5,
+    9.0,
+    "Star",
+    null
+  ],
+  [
+    "Rachin Ravindra",
+    "All-rounder",
+    "NZ",
+    1.5,
+    9.0,
+    "Star",
+    null
+  ],
+  [
+    "Venkatesh Iyer",
+    "All-rounder",
+    "IND",
+    1.5,
+    8.0,
+    "Established",
+    null
+  ],
+  [
+    "Wanindu Hasaranga",
+    "All-rounder",
+    "SL",
+    1.5,
+    8.0,
+    "Established",
+    null
+  ],
+  [
+    "Jason Holder",
+    "All-rounder",
+    "WI",
+    1.5,
+    7.0,
+    "Established",
+    null
+  ],
+  [
+    "Shivam Dube",
+    "All-rounder",
+    "IND",
+    1.0,
+    7.0,
+    "Established",
+    null
+  ],
+  [
+    "Marco Jansen",
+    "All-rounder",
+    "RSA",
+    1.0,
+    7.0,
+    "Established",
+    null
+  ],
+  [
+    "Krunal Pandya",
+    "All-rounder",
+    "IND",
+    1.0,
+    6.0,
+    "Established",
+    null
+  ],
+  [
+    "Rahul Tewatia",
+    "All-rounder",
+    "IND",
+    1.0,
+    6.0,
+    "Established",
+    null
+  ],
+  [
+    "Nitish Rana",
+    "All-rounder",
+    "IND",
+    1.0,
+    6.0,
+    "Established",
+    null
+  ],
+  [
+    "Moeen Ali",
+    "All-rounder",
+    "ENG",
+    1.0,
+    6.0,
+    "Established",
+    null
+  ],
+  [
+    "Romario Shepherd",
+    "All-rounder",
+    "WI",
+    1.0,
+    6.0,
+    "Established",
+    null
+  ],
+  [
+    "Deepak Hooda",
+    "All-rounder",
+    "IND",
+    1.0,
+    5.0,
+    "Established",
+    null
+  ],
+  [
+    "Vijay Shankar",
+    "All-rounder",
+    "IND",
+    1.0,
+    5.0,
+    "Established",
+    null
+  ],
+  [
+    "Sikandar Raza",
+    "All-rounder",
+    "ZIM",
+    1.0,
+    5.0,
+    "Established",
+    null
+  ],
+  [
+    "David Willey",
+    "All-rounder",
+    "ENG",
+    1.0,
+    5.0,
+    "Established",
+    null
+  ],
+  [
+    "Michael Bracewell",
+    "All-rounder",
+    "NZ",
+    1.0,
+    5.0,
+    "Established",
+    null
+  ],
+  [
+    "Roston Chase",
+    "All-rounder",
+    "WI",
+    0.75,
+    4.0,
+    "Established",
+    null
+  ],
+  [
+    "Sean Abbott",
+    "All-rounder",
+    "AUS",
+    0.5,
+    3.0,
+    "Established",
+    null
+  ],
+  [
+    "Daniel Sams",
+    "All-rounder",
+    "AUS",
+    0.5,
+    3.0,
+    "Established",
+    null
+  ],
+  [
+    "Tim Seifert",
+    "WK",
+    "NZ",
+    0.75,
+    4.0,
+    "Established",
+    "SET 15 — CAPPED WICKETKEEPERS ROUND 2 (WK2)"
+  ],
+  [
+    "Sam Billings",
+    "WK",
+    "ENG",
+    0.5,
+    3.0,
+    "Established",
+    null
+  ],
+  [
+    "KS Bharat",
+    "WK",
+    "IND",
+    0.5,
+    3.0,
+    "Established",
+    null
+  ],
+  [
+    "Mitchell Starc",
+    "Bowler",
+    "AUS",
+    2.0,
+    12.0,
+    "Star",
+    "SET 16 — CAPPED FAST BOWLERS ROUND 2 (FA2)"
+  ],
+  [
+    "Josh Hazlewood",
+    "Bowler",
+    "AUS",
+    1.5,
+    9.0,
+    "Star",
+    null
+  ],
+  [
+    "T Natarajan",
+    "Bowler",
+    "IND",
+    1.5,
+    8.0,
+    "Star",
+    null
+  ],
+  [
+    "Harshal Patel",
+    "Bowler",
+    "IND",
+    1.5,
+    8.0,
+    "Star",
+    null
+  ],
+  [
+    "Matheesha Pathirana",
+    "Bowler",
+    "SL",
+    1.5,
+    8.0,
+    "Established",
+    null
+  ],
+  [
+    "Avesh Khan",
+    "Bowler",
+    "IND",
+    1.0,
+    6.0,
+    "Established",
+    null
+  ],
+  [
+    "Prasidh Krishna",
+    "Bowler",
+    "IND",
+    1.0,
+    6.0,
+    "Established",
+    null
+  ],
+  [
+    "Deepak Chahar",
+    "Bowler",
+    "IND",
+    1.0,
+    6.0,
+    "Established",
+    null
+  ],
+  [
+    "Khaleel Ahmed",
+    "Bowler",
+    "IND",
+    1.0,
+    6.0,
+    "Established",
+    null
+  ],
+  [
+    "Mark Wood",
+    "Bowler",
+    "ENG",
+    1.0,
+    6.0,
+    "Established",
+    null
+  ],
+  [
+    "Lockie Ferguson",
+    "Bowler",
+    "NZ",
+    1.0,
+    6.0,
+    "Established",
+    null
+  ],
+  [
+    "Gerald Coetzee",
+    "Bowler",
+    "RSA",
+    1.0,
+    6.0,
+    "Established",
+    null
+  ],
+  [
+    "Umran Malik",
+    "Bowler",
+    "IND",
+    1.0,
+    6.0,
+    "Established",
+    null
+  ],
+  [
+    "Mukesh Kumar",
+    "Bowler",
+    "IND",
+    1.0,
+    5.0,
+    "Established",
+    null
+  ],
+  [
+    "Mohit Sharma",
+    "Bowler",
+    "IND",
+    1.0,
+    5.0,
+    "Established",
+    null
+  ],
+  [
+    "Sandeep Sharma",
+    "Bowler",
+    "IND",
+    1.0,
+    5.0,
+    "Established",
+    null
+  ],
+  [
+    "Nuwan Thushara",
+    "Bowler",
+    "SL",
+    1.0,
+    5.0,
+    "Established",
+    null
+  ],
+  [
+    "Naveen-ul-Haq",
+    "Bowler",
+    "AFG",
+    1.0,
+    5.0,
+    "Established",
+    null
+  ],
+  [
+    "Tim Southee",
+    "Bowler",
+    "NZ",
+    1.0,
+    5.0,
+    "Established",
+    null
+  ],
+  [
+    "Shamar Joseph",
+    "Bowler",
+    "WI",
+    0.75,
+    4.0,
+    "Established",
+    null
+  ],
+  [
+    "Chris Jordan",
+    "Bowler",
+    "ENG",
+    0.75,
+    4.0,
+    "Established",
+    null
+  ],
+  [
+    "Jaydev Unadkat",
+    "Bowler",
+    "IND",
+    0.75,
+    4.0,
+    "Established",
+    null
+  ],
+  [
+    "Umesh Yadav",
+    "Bowler",
+    "IND",
+    0.75,
+    4.0,
+    "Established",
+    null
+  ],
+  [
+    "Saqib Mahmood",
+    "Bowler",
+    "ENG",
+    0.5,
+    3.0,
+    "Established",
+    null
+  ],
+  [
+    "Nathan Coulter-Nile",
+    "Bowler",
+    "AUS",
+    0.5,
+    3.0,
+    "Established",
+    null
+  ],
+  [
+    "Wayne Parnell",
+    "Bowler",
+    "RSA",
+    0.5,
+    3.0,
+    "Established",
+    null
+  ],
+  [
+    "Navdeep Saini",
+    "Bowler",
+    "IND",
+    0.5,
+    3.0,
+    "Established",
+    null
+  ],
+  [
+    "Sai Kishore",
+    "Bowler",
+    "IND",
+    0.75,
+    4.0,
+    "Established",
+    "SET 17 — CAPPED SPIN BOWLERS ROUND 2 (SP2)"
+  ],
+  [
+    "Piyush Chawla",
+    "Bowler",
+    "IND",
+    0.5,
+    3.0,
+    "Established",
+    null
+  ],
+  [
+    "Amit Mishra",
+    "Bowler",
+    "IND",
+    0.5,
+    3.0,
+    "Established",
+    null
+  ],
+  [
+    "Murugan Ashwin",
+    "Bowler",
+    "IND",
+    0.5,
+    3.0,
+    "Established",
+    null
+  ]
+]
