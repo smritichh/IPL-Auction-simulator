@@ -123,11 +123,12 @@ function bowlingPlan(xi) {
       .filter((b) => used.get(b.name) < 4 && b.name !== last)
       .sort((a, b) => suit(b, phase) - suit(a, phase));
     // Fallbacks keep `pick` defined even for a thin attack (<5 bowlers): first
-    // anyone under the 4-over cap, then — as a last resort — the best bowler
-    // ignoring the cap, so a short-handed side concedes overs rather than crash.
+    // anyone under the 4-over cap, then — as a last resort — the LEAST-used
+    // bowler (so a short-handed side spreads its extra overs around rather than
+    // letting one bowler concede 100+ and crash realism).
     const pick = elig[0]
       || bowlers.filter((b) => used.get(b.name) < 4).sort((a, b) => suit(b, phase) - suit(a, phase))[0]
-      || [...bowlers].sort((a, b) => suit(b, phase) - suit(a, phase))[0];
+      || [...bowlers].sort((a, b) => used.get(a.name) - used.get(b.name) || suit(b, phase) - suit(a, phase))[0];
     overs[o] = pick;
     used.set(pick.name, used.get(pick.name) + 1);
     last = pick.name;

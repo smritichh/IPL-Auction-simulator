@@ -106,3 +106,20 @@ for (const inn of sample.innings) {
   const { topBat, topBowl } = innViews(inn);
   console.log(`  ${inn.teamShort}: ${inn.total}/${inn.wkts} (${inn.overs})  top bat: ${topBat?.p.name} ${topBat?.runs}(${topBat?.balls})  top bowl: ${topBowl?.p.name} ${topBowl?.wkts}/${topBowl?.runs}`);
 }
+
+// ── 5. Bowling figures sanity (no bowler exceeds 4 overs / absurd runs) ──
+console.log("\n=== bowling figures sanity (300 matches, legal XIs) ===");
+let maxOvers = 0, maxRuns = 0, illegal = 0;
+for (let i = 0; i < 300; i++) {
+  const a = teams[i % 10], b = teams[(i + 3) % 10];
+  const m = simulateMatch(a, b);
+  for (const inn of m.innings) for (const bw of inn.bowling) {
+    const ov = bw.balls / 6;
+    maxOvers = Math.max(maxOvers, ov);
+    maxRuns = Math.max(maxRuns, bw.runs);
+    if (ov > 4.01) illegal++;
+  }
+}
+console.log(`max overs by any bowler: ${maxOvers.toFixed(1)} (must be ≤4.0)`);
+console.log(`max runs conceded by any bowler: ${maxRuns} (T20 sane ≤ ~60)`);
+console.log(`illegal >4-over spells: ${illegal} (must be 0 for legal XIs)`);

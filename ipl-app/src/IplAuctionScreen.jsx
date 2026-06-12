@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Gavel, ChevronRight } from "lucide-react";
 import { PLAYERS } from "./players";
+import { pickXI, battingOrder, simulateMatch, innViews, oversFromBalls } from "./matchEngine";
+import { makeSchedule, emptyTable, applyResult, standings, nrrOf } from "./season";
 
 const OPEN_TIMER = 7;
 const BID_TIMER  = 4.5;
@@ -531,7 +533,7 @@ export default function IplAuctionScreen() {
     setGame((g) => simulateAllRemainingLots(g));
   };
 
-  const lockXI  = (xi) => setGame((g) => ({ ...g, phase: "done", xi }));
+  const lockXI  = (xi) => setGame((g) => ({ ...g, phase: "season", xi }));
   // restart goes back to team picker
   const restart = () => { setStarted(false); showApConfirm(false); };
 
@@ -628,6 +630,8 @@ export default function IplAuctionScreen() {
         />
       ) : game.phase === "pickxi" ? (
         <PickXIScreen squad={me.squad} onLock={lockXI} teams={game.teams} userTeamId={game.userTeamId} />
+      ) : game.phase === "season" ? (
+        <SeasonScreen teams={game.teams} userTeamId={game.userTeamId} userXI={game.xi} onRestart={restart} />
       ) : game.phase === "done" ? (
         <Summary me={me} teams={game.teams} onRestart={restart} />
       ) : (
@@ -1051,6 +1055,238 @@ function WatchlistScreen({ teamDef, onBegin }) {
   );
 }
 
+/* ── Season: league stage → points table → (playoffs handled separately) ── */
+const cloneTable = (t) => {
+  const n = {};
+  for (const k of Object.keys(t)) n[k] = { ...t[k] };
+  return n;
+};
+
+function SeasonScreen({ teams, userTeamId, userXI, onRestart }) {
+  const ids = teams.map((t) => t.id);
+  const meta = (id) => TEAMS.find((t) => t.id === id);
+  const squadOf = (id) => teams.find((t) => t.id === id).squad;
+
+  // Each team's best XI (user's is the one they locked; AI auto-picks).
+  const xis = useRef(null);
+  if (!xis.current) {
+    xis.current = {};
+    for (const id of ids) xis.current[id] = id === userTeamId ? userXI : pickXI(squadOf(id));
+  }
+  const schedule = useRef(null);
+  if (!schedule.current) schedule.current = makeSchedule(ids);
+
+  const [day, setDay]         = useState(0);
+  const [table, setTable]     = useState(() => emptyTable(ids));
+  const [lastRound, setLast]  = useState(null);
+  const [pstats, setPstats]   = useState({});   // name → {runs, wkts, team}
+  const [view, setView]       = useState("league");  // league | playoffs
+
+  const teamObj = (id) => ({ ...meta(id), squad: squadOf(id), xi: xis.current[id] });
+
+  const playRound = (roundIdx, tbl, stats) => {
+    const round = schedule.current[roundIdx];
+    const res = round.map((fx) => {
+      const m = simulateMatch(teamObj(fx.home), teamObj(fx.away));
+      return { ...m, home: fx.home, away: fx.away };
+    });
+    res.forEach((m) => {
+      applyResult(tbl, m);
+      for (const inn of m.innings) {
+        for (const b of inn.batting) if (b.runs > 0) { const s = stats[b.p.name] || (stats[b.p.name] = { runs: 0, wkts: 0, team: inn.teamId }); s.runs += b.runs; }
+        for (const bw of inn.bowling) if (bw.wkts > 0) { const s = stats[bw.p.name] || (stats[bw.p.name] = { runs: 0, wkts: 0, team: m.innings.find((i) => i.teamId !== inn.teamId)?.teamId }); s.wkts += bw.wkts; }
+      }
+    });
+    return res;
+  };
+
+  const advance = (toEnd) => {
+    const tbl = cloneTable(table), stats = { ...pstats };
+    let last = null;
+    const end = toEnd ? schedule.current.length : day + 1;
+    for (let r = day; r < end; r++) last = playRound(r, tbl, stats);
+    setTable(tbl); setPstats(stats); setLast(last); setDay(end);
+  };
+
+  const table_ = standings(table);
+  const top4 = table_.slice(0, 4).map((r) => r.id);
+  const leagueDone = day >= schedule.current.length;
+
+  // Orange/Purple cap leaders
+  const orange = Object.entries(pstats).sort((a, b) => b[1].runs - a[1].runs)[0];
+  const purple = Object.entries(pstats).sort((a, b) => b[1].wkts - a[1].wkts)[0];
+
+  const userMatch = lastRound?.find((m) => m.home === userTeamId || m.away === userTeamId);
+
+  if (view === "playoffs")
+    return <PlayoffsScreen teams={teams} userTeamId={userTeamId} xis={xis.current}
+      seeds={top4} teamObj={teamObj} onRestart={onRestart} />;
+
+  return (
+    <div className="season">
+      <div className="season-hd">
+        <div>
+          <div className="pxi-title">League Stage</div>
+          <div className="pxi-sub">{leagueDone ? "All 14 rounds complete — top 4 qualify for the playoffs" : `Match day ${day + 1} of 14 · ${schedule.current.length - day} to play`}</div>
+        </div>
+        <div className="season-actions">
+          {(orange || purple) && (
+            <div className="cap-row">
+              {orange && <span className="cap cap-orange">🟠 {orange[0].split(" ").pop()} {orange[1].runs}</span>}
+              {purple && <span className="cap cap-purple">🟣 {purple[0].split(" ").pop()} {purple[1].wkts}w</span>}
+            </div>
+          )}
+          {!leagueDone ? (
+            <div style={{ display: "flex", gap: 8 }}>
+              <button className="out-btn" onClick={() => advance(true)}>Sim rest →</button>
+              <button className="bid-btn" onClick={() => advance(false)}>Next match day →</button>
+            </div>
+          ) : (
+            <button className="bid-btn" onClick={() => setView("playoffs")}>Enter playoffs →</button>
+          )}
+        </div>
+      </div>
+
+      <div className="season-body">
+        {/* LEFT — latest match day results */}
+        <div className="season-results">
+          <div className="panel-title">{lastRound ? `MATCH DAY ${day}` : "READY"}</div>
+          {!lastRound ? (
+            <p className="empty-hint">Play the first match day to begin your season.</p>
+          ) : (
+            <>
+              {userMatch && <ResultCard m={userMatch} meta={meta} highlight userTeamId={userTeamId} />}
+              <div className="other-results">
+                {lastRound.filter((m) => m !== userMatch).map((m, i) => (
+                  <ResultCard key={i} m={m} meta={meta} userTeamId={userTeamId} />
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* RIGHT — points table */}
+        <div className="ptable">
+          <div className="panel-title">POINTS TABLE</div>
+          <div className="pt-head">
+            <span className="pt-pos">#</span><span className="pt-team">TEAM</span>
+            <span>P</span><span>W</span><span>L</span><span className="pt-nrr">NRR</span><span className="pt-pts">PTS</span>
+          </div>
+          {table_.map((row, i) => {
+            const td = meta(row.id);
+            const q = i < 4, you = row.id === userTeamId;
+            return (
+              <div key={row.id} className={`pt-row${q ? " pt-q" : ""}${you ? " pt-you" : ""}`}>
+                <span className="pt-pos">{i + 1}</span>
+                <span className="pt-team"><span className="pt-badge" style={{ background: td.color, color: td.text }}>{td.short}</span></span>
+                <span>{row.P}</span><span>{row.W}</span><span>{row.L}</span>
+                <span className="pt-nrr">{nrrOf(row) >= 0 ? "+" : ""}{nrrOf(row).toFixed(2)}</span>
+                <span className="pt-pts">{row.pts}</span>
+              </div>
+            );
+          })}
+          <div className="pt-legend"><span className="pt-q-dot" /> top 4 qualify</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Playoffs: Q1 (1v2), Eliminator (3v4), Q2, Final ── */
+function PlayoffsScreen({ teams, userTeamId, xis, seeds, teamObj, onRestart }) {
+  const meta = (id) => TEAMS.find((t) => t.id === id);
+  const [s1, s2, s3, s4] = seeds;
+  // bracket state: each tie holds its played match (or null) until contested
+  const [ties, setTies] = useState({ q1: null, elim: null, q2: null, final: null });
+  const champion = ties.final?.winner;
+
+  const play = (key, aId, bId) =>
+    setTies((t) => ({ ...t, [key]: { ...simulateMatch(teamObj(aId), teamObj(bId)), home: aId, away: bId } }));
+
+  const loser  = (m) => (m.winner === m.firstId ? m.secondId : m.firstId);
+  const q1 = ties.q1, elim = ties.elim, q2 = ties.q2, final = ties.final;
+
+  const Tie = ({ label, aId, bId, m, onPlay, sub }) => (
+    <div className="tie">
+      <div className="tie-label">{label}{sub && <span className="tie-sub"> · {sub}</span>}</div>
+      {!aId || !bId ? (
+        <div className="tie-pending">awaiting earlier results</div>
+      ) : !m ? (
+        <div className="tie-matchup">
+          <span className="tie-side"><span className="rcard-badge" style={{ background: meta(aId).color, color: meta(aId).text }}>{meta(aId).short}</span></span>
+          <span className="tie-v">vs</span>
+          <span className="tie-side"><span className="rcard-badge" style={{ background: meta(bId).color, color: meta(bId).text }}>{meta(bId).short}</span></span>
+          <button className="bid-btn tie-play" onClick={onPlay}>Play live →</button>
+        </div>
+      ) : (
+        <ResultCard m={m} meta={meta} userTeamId={userTeamId} />
+      )}
+    </div>
+  );
+
+  return (
+    <div className="season">
+      <div className="season-hd">
+        <div>
+          <div className="pxi-title">{champion ? "Champions" : "Playoffs"}</div>
+          <div className="pxi-sub">{champion ? `${meta(champion).name} win the title!` : "Top 2 get two shots at the final. Win and advance."}</div>
+        </div>
+        <button className="out-btn" onClick={onRestart}>New season ↻</button>
+      </div>
+
+      {champion ? (
+        <div className="champion">
+          <div className="champ-badge" style={{ background: meta(champion).color, color: meta(champion).text }}>{meta(champion).short}</div>
+          <h1 className="champ-name">{meta(champion).name}</h1>
+          <div className="champ-sub">{champion === userTeamId ? "🏆 You built this squad from the auction floor. Champions." : "Better luck next season."}</div>
+          <button className="bid-btn" onClick={onRestart} style={{ marginTop: 18 }}>Run it back ↻</button>
+        </div>
+      ) : (
+        <div className="bracket">
+          <Tie label="Qualifier 1" sub={`${seeds[0]} (1) v ${seeds[1]} (2)`} aId={s1} bId={s2} m={q1} onPlay={() => play("q1", s1, s2)} />
+          <Tie label="Eliminator" sub={`${seeds[2]} (3) v ${seeds[3]} (4)`} aId={s3} bId={s4} m={elim} onPlay={() => play("elim", s3, s4)} />
+          <Tie label="Qualifier 2" sub="Q1 loser v Eliminator winner"
+            aId={q1 ? loser(q1) : null} bId={elim?.winner} m={q2}
+            onPlay={() => play("q2", loser(q1), elim.winner)} />
+          <Tie label="Final" sub="Q1 winner v Q2 winner"
+            aId={q1?.winner} bId={q2?.winner} m={final}
+            onPlay={() => play("final", q1.winner, q2.winner)} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Compact result card: both scores + the standout performer from each side.
+function ResultCard({ m, meta, highlight, userTeamId }) {
+  const [a, b] = m.innings;
+  const won = m.winner;
+  const youWon = m.winner === userTeamId && (m.home === userTeamId || m.away === userTeamId);
+  const youLost = (m.home === userTeamId || m.away === userTeamId) && !youWon;
+  return (
+    <div className={`rcard${highlight ? " rcard-big" : ""}${highlight && youWon ? " rcard-win" : ""}${highlight && youLost ? " rcard-loss" : ""}`}>
+      {highlight && <div className="rcard-tag">{youWon ? "YOU WON" : "YOU LOST"}</div>}
+      {[a, b].map((inn) => {
+        const td = meta(inn.teamId);
+        const { topBat, topBowl } = innViews(inn);
+        return (
+          <div key={inn.teamId} className={`rcard-inn${inn.teamId === won ? " rcard-w" : ""}`}>
+            <span className="rcard-badge" style={{ background: td.color, color: td.text }}>{td.short}</span>
+            <span className="rcard-score">{inn.total}/{inn.wkts}<span className="rcard-ov"> ({inn.overs})</span></span>
+            {highlight && (
+              <span className="rcard-stars">
+                {topBat && `${topBat.p.name.split(" ").pop()} ${topBat.runs}(${topBat.balls})`}
+                {topBowl && topBowl.wkts > 0 && ` · ${topBowl.p.name.split(" ").pop()} ${topBowl.wkts}/${topBowl.runs}`}
+              </span>
+            )}
+          </div>
+        );
+      })}
+      <div className="rcard-result">{m.resultText}</div>
+    </div>
+  );
+}
+
 function Summary({ me, teams, onRestart }) {
   const spent  = round2(120 - me.purse);
   const sorted = [...teams].sort((a, b) => b.squad.length - a.squad.length);
@@ -1148,14 +1384,19 @@ function PickXIScreen({ squad, onLock, teams = [], userTeamId }) {
 
   const roleCounts = { WK: 0, Batter: 0, "All-rounder": 0, Bowler: 0 };
   lineup.forEach((p) => { roleCounts[p.role] = (roleCounts[p.role] || 0) + 1; });
+  // Bowling options = specialist bowlers + all-rounders. You need 5 to legally
+  // bowl 20 overs (max 4 each), so this is a hard requirement, not a warning.
+  const bowlOptions = roleCounts.Bowler + roleCounts["All-rounder"];
 
-  const canLock = lineup.length === 11;
+  // Blocking requirements (must satisfy to lock) vs soft warnings.
+  const blockers = [];
+  if (lineup.length === 11 && roleCounts.WK === 0) blockers.push("Pick a wicket-keeper");
+  if (lineup.length === 11 && bowlOptions < 5)     blockers.push(`Need 5 bowling options (have ${bowlOptions})`);
+  const canLock = lineup.length === 11 && !blockers.length;
 
-  // Warn about common XI errors
-  const warnings = [];
-  if (lineup.length > 0 && roleCounts.WK === 0)   warnings.push("No wicket-keeper");
-  if (roleCounts.Bowler < 4)                       warnings.push("Too few bowlers (need ≥ 4)");
-  if ((roleCounts.WK + roleCounts.Batter) > 6)    warnings.push("Too many pure batters");
+  // Soft warnings (don't block).
+  const warnings = [...blockers];
+  if (!blockers.length && (roleCounts.WK + roleCounts.Batter) > 6) warnings.push("Heavy on pure batters");
 
   return (
     <div className="pickxi">
@@ -1170,7 +1411,7 @@ function PickXIScreen({ squad, onLock, teams = [], userTeamId }) {
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
           {warnings.length > 0 && <div className="pxi-warn">{warnings[0]}</div>}
           <button className="bid-btn pxi-lock" onClick={() => onLock(lineup)} disabled={!canLock}>
-            {canLock ? "Lock XI →" : `${lineup.length} / 11 selected`}
+            {lineup.length < 11 ? `${lineup.length} / 11 selected` : blockers.length ? "Fix your XI" : "Lock XI →"}
           </button>
         </div>
       </div>
@@ -1941,6 +2182,69 @@ const styles = `
 .wl-star { font-size: 14px; flex: none; }
 .wl-name { font-size: 12px; font-weight: 700; color: #EAEEF7; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .wl-meta { font-size: 9.5px; color: #6B7488; flex: none; }
+
+/* ── season / league ── */
+.season { padding: 4px 2px; }
+.season-hd { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
+.season-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.cap-row { display: flex; gap: 8px; }
+.cap { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 99px; }
+.cap-orange { background: rgba(245,140,30,.14); color: #ffa94d; }
+.cap-purple { background: rgba(167,139,250,.14); color: #c4b5fd; }
+
+.season-body { display: grid; grid-template-columns: 1fr 360px; gap: 16px; align-items: start; }
+@media (max-width: 880px) { .season-body { grid-template-columns: 1fr; } }
+.season-results { display: flex; flex-direction: column; gap: 10px; }
+.other-results { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+
+/* result card */
+.rcard { background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.08); border-radius: 10px; padding: 9px 12px; }
+.rcard-big { padding: 14px 16px; border-width: 1px; }
+.rcard-win  { border-color: rgba(61,220,151,.4); background: rgba(61,220,151,.06); }
+.rcard-loss { border-color: rgba(255,90,95,.35); background: rgba(255,90,95,.05); }
+.rcard-tag { font-size: 10px; font-weight: 800; letter-spacing: .14em; color: #8A93A8; margin-bottom: 8px; }
+.rcard-win .rcard-tag { color: #3DDC97; }
+.rcard-loss .rcard-tag { color: #FF8488; }
+.rcard-inn { display: flex; align-items: center; gap: 10px; padding: 3px 0; }
+.rcard-w .rcard-score { color: #fff; font-weight: 800; }
+.rcard-badge { font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 5px; flex: none; min-width: 34px; text-align: center; }
+.rcard-score { font-family: var(--display-font); font-size: 17px; font-weight: 700; color: #C7CEDD; letter-spacing: .02em; }
+.rcard-ov { font-size: 11px; color: #6B7488; font-family: ui-sans-serif, system-ui; }
+.rcard-stars { font-size: 11px; color: #8A93A8; margin-left: auto; }
+.rcard-result { font-size: 11.5px; color: #9fb6d9; margin-top: 7px; padding-top: 7px; border-top: 1px solid rgba(255,255,255,.06); }
+.rcard:not(.rcard-big) .rcard-result { font-size: 10.5px; margin-top: 4px; padding-top: 4px; }
+
+/* points table */
+.ptable { background: rgba(255,255,255,.02); border: 1px solid rgba(255,255,255,.07); border-radius: 12px; padding: 12px 14px; }
+.pt-head, .pt-row { display: grid; grid-template-columns: 22px 1fr 22px 22px 22px 52px 32px; align-items: center; gap: 4px; font-size: 12px; }
+.pt-head { font-size: 9.5px; font-weight: 700; letter-spacing: .06em; color: #6B7488; padding: 4px 0 7px; border-bottom: 1px solid rgba(255,255,255,.08); }
+.pt-row { padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,.04); }
+.pt-pos { color: #6B7488; text-align: center; }
+.pt-q .pt-pos { color: #3DDC97; font-weight: 800; }
+.pt-you { background: rgba(245,196,81,.06); border-radius: 6px; }
+.pt-badge { font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 5px; }
+.pt-nrr { text-align: right; color: #8A93A8; font-size: 11px; }
+.pt-pts { text-align: right; font-weight: 800; color: #EAEEF7; }
+.pt-q .pt-pts { color: #3DDC97; }
+.pt-legend { font-size: 10px; color: #6B7488; margin-top: 8px; display: flex; align-items: center; gap: 6px; }
+.pt-q-dot { width: 7px; height: 7px; border-radius: 50%; background: #3DDC97; }
+
+/* playoffs bracket */
+.bracket { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+@media (max-width: 720px) { .bracket { grid-template-columns: 1fr; } }
+.tie { background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.08); border-radius: 12px; padding: 14px; }
+.tie-label { font-size: 12px; font-weight: 800; letter-spacing: .08em; color: #F5C451; margin-bottom: 10px; }
+.tie-sub { color: #6B7488; font-weight: 600; letter-spacing: 0; }
+.tie-pending { font-size: 12px; color: #6B7488; font-style: italic; padding: 8px 0; }
+.tie-matchup { display: flex; align-items: center; gap: 12px; }
+.tie-v { font-size: 12px; color: #6B7488; }
+.tie-play { margin-left: auto; font-size: 12px; padding: 8px 14px; }
+
+/* champion screen */
+.champion { text-align: center; padding: 40px 20px; }
+.champ-badge { display: inline-grid; place-items: center; width: 80px; height: 80px; border-radius: 18px; font-size: 26px; font-weight: 800; font-family: var(--display-font); margin-bottom: 16px; }
+.champ-name { font-family: var(--display-font); text-transform: uppercase; font-size: 44px; font-weight: 800; letter-spacing: .01em; margin: 0; }
+.champ-sub { font-size: 14px; color: #9fb6d9; margin-top: 8px; }
 
 /* budget pace warning banner */
 .budget-warn {
