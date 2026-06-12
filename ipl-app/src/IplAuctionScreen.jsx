@@ -1192,16 +1192,142 @@ function SeasonScreen({ teams, userTeamId, userXI, onRestart }) {
   );
 }
 
+/* ── Over-by-over viewer: replays a pre-simulated match one over at a time ── */
+const ballChip = (o) => {
+  if (o === "W") return { t: "W", c: "ob-w" };
+  if (o === 4)   return { t: "4", c: "ob-4" };
+  if (o === 6)   return { t: "6", c: "ob-6" };
+  if (o === 0)   return { t: "•", c: "ob-dot" };
+  return { t: String(o), c: "ob-run" };
+};
+
+function OverByOver({ match, label, meta, userTeamId, onDone }) {
+  const [innIdx, setInn]   = useState(0);
+  const [overIdx, setOver] = useState(-1);
+  const [stage, setStage]  = useState("play");   // play | break | result
+
+  const inn = match.innings[innIdx];
+  const tl  = inn.timeline;
+  const cur = overIdx >= 0 ? tl[overIdx] : null;
+  const score = cur ? cur.score : 0;
+  const wkts  = cur ? cur.wicketsDown : 0;
+  const td    = meta(inn.teamId);
+  const target = innIdx === 1 ? match.innings[0].total + 1 : null;
+
+  const next = () => {
+    if (stage === "result") return onDone();
+    if (stage === "break") { setStage("play"); setInn(1); setOver(-1); return; }
+    if (overIdx < tl.length - 1) setOver(overIdx + 1);
+    else if (innIdx === 0) setStage("break");
+    else setStage("result");
+  };
+  const skip = () => {
+    if (innIdx === 0) { setInn(1); setOver(match.innings[1].timeline.length - 1); }
+    else setOver(tl.length - 1);
+    setStage("result");
+  };
+
+  // Result stage — final scorecard summary.
+  if (stage === "result") {
+    return (
+      <div className="ob">
+        <div className="ob-eyebrow">{label} · RESULT</div>
+        <ResultCard m={match} meta={meta} highlight userTeamId={userTeamId} />
+        <button className="bid-btn" style={{ marginTop: 18 }} onClick={onDone}>Continue →</button>
+      </div>
+    );
+  }
+
+  // Innings break.
+  if (stage === "break") {
+    const first = match.innings[0], chasing = meta(match.innings[1].teamId);
+    return (
+      <div className="ob">
+        <div className="ob-eyebrow">{label} · INNINGS BREAK</div>
+        <div className="ob-break">
+          <div className="ob-break-score">{meta(first.teamId).short} posted <b>{first.total}/{first.wkts}</b> ({first.overs})</div>
+          <div className="ob-break-need">{chasing.name} need <b>{first.total + 1}</b> to win</div>
+        </div>
+        <button className="bid-btn" onClick={next}>Start the chase →</button>
+      </div>
+    );
+  }
+
+  // Live play.
+  const oversDisp = cur ? `${overIdx + 1}.0` : "0.0";
+  const need = target != null ? target - score : null;
+  const ballsLeft = (20 - (overIdx + 1)) * 6;
+
+  return (
+    <div className="ob">
+      <div className="ob-eyebrow">{label} · {meta(match.innings[0].teamId).short} v {meta(match.innings[1].teamId).short}</div>
+
+      {/* Scoreboard */}
+      <div className="ob-board">
+        <div className="ob-team">
+          <span className="rcard-badge" style={{ background: td.color, color: td.text }}>{td.short}</span>
+          <span className="ob-batting">batting</span>
+        </div>
+        <div className="ob-score">{score}<span className="ob-wkts">/{wkts}</span></div>
+        <div className="ob-overs">{oversDisp} ov</div>
+        {target != null && (
+          <div className="ob-chase">
+            {need > 0
+              ? <>need <b>{need}</b> off <b>{ballsLeft}</b></>
+              : <b className="ob-won">target reached</b>}
+          </div>
+        )}
+      </div>
+
+      {/* This over */}
+      {cur ? (
+        <div className="ob-over">
+          <div className="ob-over-head">
+            <span>Over {cur.over} · {cur.bowler.split(" ").pop()}</span>
+            <span className="ob-over-tot">{cur.runs} run{cur.runs !== 1 ? "s" : ""}{cur.wkts ? ` · ${cur.wkts}W` : ""}</span>
+          </div>
+          <div className="ob-balls">
+            {cur.balls.map((b, i) => { const c = ballChip(b); return <span key={i} className={`ob-ball ${c.c}`}>{c.t}</span>; })}
+          </div>
+          {cur.events.filter((e) => e.type === "W" || e.type === 6).map((e, i) => (
+            <div key={i} className={`ob-event ${e.type === "W" ? "ob-event-w" : "ob-event-6"}`}>
+              {e.type === "W" ? `WICKET — ${e.batter} out` : `SIX — ${e.batter}`}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="ob-over ob-start">{td.name} to bat. Click to begin the innings.</div>
+      )}
+
+      <div className="ob-controls">
+        <button className="out-btn" onClick={skip}>⏩ Skip to result</button>
+        <button className="bid-btn" onClick={next}>Next over →</button>
+      </div>
+    </div>
+  );
+}
+
 /* ── Playoffs: Q1 (1v2), Eliminator (3v4), Q2, Final ── */
 function PlayoffsScreen({ teams, userTeamId, xis, seeds, teamObj, onRestart }) {
   const meta = (id) => TEAMS.find((t) => t.id === id);
   const [s1, s2, s3, s4] = seeds;
   // bracket state: each tie holds its played match (or null) until contested
   const [ties, setTies] = useState({ q1: null, elim: null, q2: null, final: null });
+  const [live, setLive] = useState(null);   // { key, label, match } while watching over-by-over
   const champion = ties.final?.winner;
 
-  const play = (key, aId, bId) =>
-    setTies((t) => ({ ...t, [key]: { ...simulateMatch(teamObj(aId), teamObj(bId)), home: aId, away: bId } }));
+  // Simulate the match up-front (deterministic), then watch it unfold over by over.
+  const play = (key, label, aId, bId) =>
+    setLive({ key, label, match: { ...simulateMatch(teamObj(aId), teamObj(bId)), home: aId, away: bId } });
+
+  // When the viewer finishes, record the result into the bracket.
+  const finishLive = () => {
+    setTies((t) => ({ ...t, [live.key]: live.match }));
+    setLive(null);
+  };
+
+  if (live)
+    return <OverByOver match={live.match} label={live.label} meta={meta} userTeamId={userTeamId} onDone={finishLive} />;
 
   const loser  = (m) => (m.winner === m.firstId ? m.secondId : m.firstId);
   const q1 = ties.q1, elim = ties.elim, q2 = ties.q2, final = ties.final;
@@ -1243,14 +1369,14 @@ function PlayoffsScreen({ teams, userTeamId, xis, seeds, teamObj, onRestart }) {
         </div>
       ) : (
         <div className="bracket">
-          <Tie label="Qualifier 1" sub={`${seeds[0]} (1) v ${seeds[1]} (2)`} aId={s1} bId={s2} m={q1} onPlay={() => play("q1", s1, s2)} />
-          <Tie label="Eliminator" sub={`${seeds[2]} (3) v ${seeds[3]} (4)`} aId={s3} bId={s4} m={elim} onPlay={() => play("elim", s3, s4)} />
+          <Tie label="Qualifier 1" sub={`${seeds[0]} (1) v ${seeds[1]} (2)`} aId={s1} bId={s2} m={q1} onPlay={() => play("q1", "Qualifier 1", s1, s2)} />
+          <Tie label="Eliminator" sub={`${seeds[2]} (3) v ${seeds[3]} (4)`} aId={s3} bId={s4} m={elim} onPlay={() => play("elim", "Eliminator", s3, s4)} />
           <Tie label="Qualifier 2" sub="Q1 loser v Eliminator winner"
             aId={q1 ? loser(q1) : null} bId={elim?.winner} m={q2}
-            onPlay={() => play("q2", loser(q1), elim.winner)} />
+            onPlay={() => play("q2", "Qualifier 2", loser(q1), elim.winner)} />
           <Tie label="Final" sub="Q1 winner v Q2 winner"
             aId={q1?.winner} bId={q2?.winner} m={final}
-            onPlay={() => play("final", q1.winner, q2.winner)} />
+            onPlay={() => play("final", "The Final", q1.winner, q2.winner)} />
         </div>
       )}
     </div>
@@ -2239,6 +2365,43 @@ const styles = `
 .tie-matchup { display: flex; align-items: center; gap: 12px; }
 .tie-v { font-size: 12px; color: #6B7488; }
 .tie-play { margin-left: auto; font-size: 12px; padding: 8px 14px; }
+
+/* over-by-over viewer */
+.ob { max-width: 620px; margin: 0 auto; padding: 8px 2px; }
+.ob-eyebrow { font-size: 11px; font-weight: 800; letter-spacing: .14em; color: #8A93A8; margin-bottom: 14px; text-align: center; }
+.ob-board {
+  display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 14px;
+  background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.08);
+  border-radius: 14px; padding: 16px 20px; margin-bottom: 14px;
+}
+.ob-team { display: flex; align-items: center; gap: 8px; }
+.ob-batting { font-size: 11px; color: #6B7488; }
+.ob-score { font-family: var(--display-font); font-size: 44px; font-weight: 800; color: #EAEEF7; line-height: 1; }
+.ob-wkts { color: #8A93A8; font-size: 30px; }
+.ob-overs { font-size: 13px; color: #8A93A8; font-weight: 600; }
+.ob-chase { grid-column: 1 / -1; font-size: 13px; color: #9fb6d9; padding-top: 6px; border-top: 1px solid rgba(255,255,255,.07); }
+.ob-chase b { color: #F5C451; }
+.ob-won { color: #3DDC97; }
+
+.ob-over { background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.08); border-radius: 12px; padding: 14px 16px; min-height: 90px; }
+.ob-start { color: #6B7488; font-style: italic; display: flex; align-items: center; }
+.ob-over-head { display: flex; justify-content: space-between; font-size: 12px; color: #8A93A8; margin-bottom: 10px; }
+.ob-over-tot { font-weight: 700; color: #C7CEDD; }
+.ob-balls { display: flex; gap: 6px; flex-wrap: wrap; }
+.ob-ball { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; font-size: 13px; font-weight: 800; font-family: var(--display-font); }
+.ob-dot { background: rgba(255,255,255,.06); color: #6B7488; }
+.ob-run { background: rgba(255,255,255,.1); color: #C7CEDD; }
+.ob-4   { background: rgba(79,195,247,.18); color: #4FC3F7; }
+.ob-6   { background: rgba(245,196,81,.2); color: #F5C451; }
+.ob-w   { background: rgba(255,90,95,.22); color: #FF8488; }
+.ob-event { margin-top: 9px; font-size: 12px; font-weight: 800; letter-spacing: .04em; }
+.ob-event-w { color: #FF8488; }
+.ob-event-6 { color: #F5C451; }
+.ob-controls { display: flex; justify-content: space-between; gap: 10px; margin-top: 16px; }
+.ob-break { background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.08); border-radius: 14px; padding: 22px; text-align: center; margin-bottom: 16px; }
+.ob-break-score { font-size: 15px; color: #C7CEDD; }
+.ob-break-need { font-size: 14px; color: #9fb6d9; margin-top: 8px; }
+.ob-break-score b, .ob-break-need b { font-family: var(--display-font); font-size: 20px; color: #fff; }
 
 /* champion screen */
 .champion { text-align: center; padding: 40px 20px; }

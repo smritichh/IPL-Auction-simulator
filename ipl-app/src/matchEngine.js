@@ -191,6 +191,7 @@ function simulateInnings(rng, battingXI, bowlingXI, target) {
     const bc = bowlCard(bowler);
     const phase = phaseOf(over);
     const overEvents = [];
+    const ballLog = [];          // every delivery this over, for the chip row
     let overRuns = 0, overWkts = 0;
 
     for (let ball = 0; ball < 6 && wkts < 10; ball++) {
@@ -202,6 +203,7 @@ function simulateInnings(rng, battingXI, bowlingXI, target) {
 
       const o = simulateBall(rng, striker.p, bowler, phase, chase);
       bc.balls++; striker.balls++;
+      ballLog.push(o);
 
       if (o === "W") {
         striker.out = true; striker.how = bowler.name;
@@ -220,9 +222,12 @@ function simulateInnings(rng, battingXI, bowlingXI, target) {
     }
 
     [strike, nonStrike] = [nonStrike, strike];   // change ends after the over
+    // Striker/non-striker names for a light "batters at the crease" line.
     timeline.push({
       over: over + 1, phase, bowler: bowler.name,
-      runs: overRuns, wkts: overWkts, score, wicketsDown: wkts, events: overEvents,
+      runs: overRuns, wkts: overWkts, score, wicketsDown: wkts,
+      events: overEvents, balls: ballLog,
+      batters: [bat[strike]?.p.name, bat[nonStrike]?.p.name].filter(Boolean),
     });
     if (chased) break;
   }
