@@ -7,18 +7,31 @@ const BID_TIMER  = 4.5;
 const TICK       = 0.3;
 const P_AI       = 0.5;
 
+// `jump` = how often the franchise jump-bids to scare rivals off (personality).
+// RCB/PBKS are theatrical aggressors, DC/RR slow-play, the rest sit between.
 const TEAMS = [
-  { id: "MI",   name: "Mumbai Indians",              short: "MI",   color: "#1B6FCB", text: "#fff",    agg: 1.0  },
-  { id: "CSK",  name: "Chennai Super Kings",         short: "CSK",  color: "#F4C430", text: "#10131C", agg: 1.0  },
-  { id: "RCB",  name: "Royal Challengers Bengaluru", short: "RCB",  color: "#C8102E", text: "#fff",    agg: 1.12 },
-  { id: "KKR",  name: "Kolkata Knight Riders",       short: "KKR",  color: "#6A4C93", text: "#fff",    agg: 0.98 },
-  { id: "DC",   name: "Delhi Capitals",              short: "DC",   color: "#2E5EAA", text: "#fff",    agg: 0.92 },
-  { id: "SRH",  name: "Sunrisers Hyderabad",         short: "SRH",  color: "#FF7A1A", text: "#10131C", agg: 1.08 },
-  { id: "RR",   name: "Rajasthan Royals",            short: "RR",   color: "#E6308A", text: "#fff",    agg: 0.90 },
-  { id: "PBKS", name: "Punjab Kings",                short: "PBKS", color: "#D31329", text: "#fff",    agg: 1.10 },
-  { id: "GT",   name: "Gujarat Titans",              short: "GT",   color: "#C2A05A", text: "#10131C", agg: 1.0  },
-  { id: "LSG",  name: "Lucknow Super Giants",        short: "LSG",  color: "#1FA2C4", text: "#10131C", agg: 1.03 },
+  { id: "MI",   name: "Mumbai Indians",              short: "MI",   color: "#1B6FCB", text: "#fff",    agg: 1.0,  jump: 0.30 },
+  { id: "CSK",  name: "Chennai Super Kings",         short: "CSK",  color: "#F4C430", text: "#10131C", agg: 1.0,  jump: 0.25 },
+  { id: "RCB",  name: "Royal Challengers Bengaluru", short: "RCB",  color: "#C8102E", text: "#fff",    agg: 1.12, jump: 0.52 },
+  { id: "KKR",  name: "Kolkata Knight Riders",       short: "KKR",  color: "#6A4C93", text: "#fff",    agg: 0.98, jump: 0.35 },
+  { id: "DC",   name: "Delhi Capitals",              short: "DC",   color: "#2E5EAA", text: "#fff",    agg: 0.92, jump: 0.16 },
+  { id: "SRH",  name: "Sunrisers Hyderabad",         short: "SRH",  color: "#FF7A1A", text: "#10131C", agg: 1.08, jump: 0.42 },
+  { id: "RR",   name: "Rajasthan Royals",            short: "RR",   color: "#E6308A", text: "#fff",    agg: 0.90, jump: 0.16 },
+  { id: "PBKS", name: "Punjab Kings",                short: "PBKS", color: "#D31329", text: "#fff",    agg: 1.10, jump: 0.48 },
+  { id: "GT",   name: "Gujarat Titans",              short: "GT",   color: "#C2A05A", text: "#10131C", agg: 1.0,  jump: 0.28 },
+  { id: "LSG",  name: "Lucknow Super Giants",        short: "LSG",  color: "#1FA2C4", text: "#10131C", agg: 1.03, jump: 0.33 },
 ];
+
+// Pacing variance: marquee lots are slow theater, accelerated lots move fast.
+const openTimer = (p) => ({ Marquee: 10, Star: 8, Established: 7, Emerging: 6, Uncapped: 5 }[p.tier] ?? 7);
+const bidTimer  = (p) => (p.tier === "Marquee" ? 5.5 : BID_TIMER);
+
+// Human-readable labels for blueprint slots (need chips + storylines).
+const CAT_LABEL = {
+  topBat: "top-order bats", midBat: "middle order", finisher: "finishers", wk: "keepers",
+  pace: "pace", spin: "spin", deathBowl: "death overs", powerplay: "powerplay bowling",
+  allrounder: "all-rounders",
+};
 
 // PLAYERS (~190 real IPL players, 5-tier system) is imported from ./players
 
@@ -183,28 +196,38 @@ export default function IplAuctionScreen() {
   // How many teams still need players (drives competition-aware urgency).
   const needersCount = (g) => g.teams.filter((t) => t.squad.length < SQUAD_TARGET).length;
 
-  // Max price a rival will pay for the lot at index pIdx, given live game state.
-  const walkaway = (team, pIdx, g) => {
-    const lotsLeft      = PLAYERS.length - pIdx;
+  // The auction runs over g.order — an array of PLAYERS indices. Normally
+  // 0..N-1, but the unsold re-auction round appends indices at the end, so
+  // lots must always be addressed via the order array, never PLAYERS[g.index].
+  const lotPlayer = (g, i = g.index) => PLAYERS[g.order[i]];
+
+  // Max price a rival will pay for the current lot, given live game state.
+  const walkaway = (team, lotIdx, g) => {
+    const pIdx          = g.order[lotIdx];
+    const lotsLeft      = g.order.length - lotIdx;
     const activeNeeders = needersCount(g);
     return valuation(team, PLAYERS[pIdx], vals[pIdx][team.id], lotsLeft, activeNeeders);
   };
 
   const initGame = (teamId = "MI") => ({
-    userTeamId: teamId,
-    phase:      "bidding",
-    index:      0,
-    asking:     PLAYERS[0].base,
-    bid:        null,
-    leader:     null,
-    timer:      OPEN_TIMER,
-    tmax:       OPEN_TIMER,
-    userPassed: false,
-    teams:      TEAMS.map((t) => ({ ...t, isUser: t.id === teamId, purse: 120, squad: [], bias: makeBias() })),
-    ticker:     [{ id: "sys", text: `On the block — ${PLAYERS[0].name}` }],
-    soldLog:    [],
-    lastSold:   null,
-    recentBid:  {},
+    userTeamId:  teamId,
+    phase:       "watchlist",                       // star your targets before lot 1
+    order:       PLAYERS.map((_, i) => i),          // lot sequence (player indices)
+    unsold:      [],                                // player indices passed in by all 10 teams
+    reauctioned: false,                             // unsold round runs once
+    watch:       new Set(),                         // starred player names (fast-forward stops here)
+    index:       0,
+    asking:      PLAYERS[0].base,
+    bid:         null,
+    leader:      null,
+    timer:       openTimer(PLAYERS[0]),
+    tmax:        openTimer(PLAYERS[0]),
+    userPassed:  false,
+    teams:       TEAMS.map((t) => ({ ...t, isUser: t.id === teamId, purse: 120, squad: [], bias: makeBias() })),
+    ticker:      [{ id: "sys", text: `On the block — ${PLAYERS[0].name}` }],
+    soldLog:     [],
+    lastSold:    null,
+    recentBid:   {},
   });
 
   const [game, setGame]       = useState(() => initGame("MI"));
@@ -216,7 +239,7 @@ export default function IplAuctionScreen() {
   const apConfirmRef = useRef(false);
 
   const resolve = (g) => {
-    const p = PLAYERS[g.index];
+    const p = lotPlayer(g);
     if (g.leader) {
       const price = g.bid;
       const won   = TEAMS.find((t) => t.id === g.leader);
@@ -230,13 +253,14 @@ export default function IplAuctionScreen() {
         ...g, phase: "sold", teams,
         soldLog:  [entry, ...g.soldLog],
         lastSold: { player: p, teamId: g.leader, price, you: g.leader === g.userTeamId },
-        ticker:   [{ id: g.leader, text: `SOLD — ${p.name} → ${won.short} ${cr(price)}` }, ...g.ticker].slice(0, 12),
+        ticker:   [{ id: g.leader, kind: "sold", text: `SOLD — ${p.name} → ${won.short} ${cr(price)}` }, ...g.ticker].slice(0, 14),
       };
     }
     return {
       ...g, phase: "sold",
+      unsold:   [...g.unsold, g.order[g.index]],   // eligible for the re-auction round
       lastSold: { player: p, unsold: true },
-      ticker:   [{ id: "sys", text: `UNSOLD — ${p.name}` }, ...g.ticker].slice(0, 12),
+      ticker:   [{ id: "sys", text: `UNSOLD — ${p.name}` }, ...g.ticker].slice(0, 14),
     };
   };
 
@@ -244,7 +268,7 @@ export default function IplAuctionScreen() {
     // Freeze the auction while the autopilot confirm dialog is open so
     // the user doesn't lose lots between clicking the button and confirming.
     if (g.phase !== "bidding" || apConfirmRef.current) return g;
-    const p       = PLAYERS[g.index];
+    const p       = lotPlayer(g);
     // Rivals push back hard when YOU lead, so you can't snipe a player cheaply.
     const userLeading = g.leader === g.userTeamId;
     // When you're leading, rivals respond almost every tick (95%) —
@@ -258,10 +282,9 @@ export default function IplAuctionScreen() {
         const top    = willing.slice(0, Math.min(3, willing.length));
         const actor  = top[Math.floor(Math.random() * top.length)];
         const wa      = walkaway(actor, g.index, g);
-        // Jump bid: hot/aggressive teams leap ahead to scare you off.
-        // Higher probability (40%) than before to create more pressure.
+        // Jump bid: aggressive franchises (actor.jump) leap ahead to scare rivals off.
         let newBid = g.asking;
-        if (Math.random() < 0.40 && wa >= g.asking + inc(g.asking) * 2) {
+        if (Math.random() < actor.jump && wa >= g.asking + inc(g.asking) * 2) {
           newBid = round2(g.asking + inc(g.asking));
         }
         newBid = round2(Math.min(newBid, wa, actor.purse));
@@ -270,10 +293,10 @@ export default function IplAuctionScreen() {
           leader:    actor.id,
           bid:       newBid,
           asking:    round2(newBid + inc(newBid)),
-          timer:     BID_TIMER,
-          tmax:      BID_TIMER,
+          timer:     bidTimer(p),
+          tmax:      bidTimer(p),
           recentBid: { ...g.recentBid, [actor.id]: { amount: newBid, uid: Date.now() } },
-          ticker:    [{ id: actor.id, text: `${actor.short} bids ${cr(newBid)}` }, ...g.ticker].slice(0, 12),
+          ticker:    [{ id: actor.id, kind: "bid", text: `${actor.short} bids ${cr(newBid)}` }, ...g.ticker].slice(0, 14),
         };
       }
     }
@@ -288,26 +311,63 @@ export default function IplAuctionScreen() {
     return () => clearInterval(id);
   }, [started]);
 
+  // Rival storyline derived from live engine state — surfaces the 10-team war
+  // the user otherwise can't see. Pure templates, no LLM.
+  const storyline = (teams) => {
+    const cands = [];
+    for (const t of teams) {
+      const n = t.squad.length;
+      if (n > 0 && n < SQUAD_MIN && t.purse / Math.max(1, SQUAD_TARGET - n) < 1.2)
+        cands.push(`${t.id} squeezed — ${cr(t.purse)} left for ${SQUAD_TARGET - n} slots`);
+      const cc = squadCatCounts(t.squad);
+      for (const [k, target] of Object.entries(CAT_TARGET))
+        if ((cc[k] || 0) >= target + 1) cands.push(`${t.id} stockpiling ${CAT_LABEL[k]}`);
+    }
+    const spender = [...teams].sort((a, b) => a.purse - b.purse)[0];
+    if (120 - spender.purse > 40) cands.push(`${spender.id} biggest spenders so far — ${cr(round2(120 - spender.purse))} gone`);
+    return cands.length ? cands[Math.floor(Math.random() * cands.length)] : null;
+  };
+
   useEffect(() => {
     if (game.phase !== "sold") return;
     const id = setTimeout(() => {
       setGame((g) => {
+        let order = g.order, unsold = g.unsold, reauctioned = g.reauctioned;
+        const extra = [];
         const ni = g.index + 1;
-        if (ni >= PLAYERS.length) return { ...g, phase: "pickxi" };
-        const np = PLAYERS[ni];
+        if (ni >= order.length) {
+          // First pass done — bring unsold players back once (real IPL mechanic).
+          if (unsold.length && !reauctioned) {
+            order = [...order, ...unsold];
+            extra.push({ id: "sys", kind: "set", text: `RE-AUCTION ROUND — ${unsold.length} unsold players return` });
+            unsold = []; reauctioned = true;
+          } else {
+            return { ...g, phase: "pickxi" };
+          }
+        }
+        const np = PLAYERS[order[ni]];
+        // Chapter break when the auction moves to a new set.
+        if (np.set !== lotPlayer(g).set)
+          extra.push({ id: "sys", kind: "set", text: `${np.set}` });
+        // Periodic rival storyline keeps the 10-team war visible.
+        if (ni % 8 === 0) {
+          const s = storyline(g.teams);
+          if (s) extra.push({ id: "sys", kind: "story", text: s });
+        }
         return {
           ...g,
+          order, unsold, reauctioned,
           phase:      "bidding",
           index:      ni,
           asking:     np.base,
           bid:        null,
           leader:     null,
-          timer:      OPEN_TIMER,
-          tmax:       OPEN_TIMER,
+          timer:      openTimer(np),
+          tmax:       openTimer(np),
           userPassed: false,
           recentBid:  {},
           lastSold:   null,
-          ticker:     [{ id: "sys", text: `On the block — ${np.name}` }, ...g.ticker].slice(0, 12),
+          ticker:     [{ id: "sys", text: `On the block — ${np.name}` }, ...extra, ...g.ticker].slice(0, 14),
         };
       });
     }, 2000);
@@ -325,9 +385,9 @@ export default function IplAuctionScreen() {
         leader:    g.userTeamId,
         bid:       newBid,
         asking:    round2(newBid + inc(newBid)),
-        timer:     BID_TIMER,
-        tmax:      BID_TIMER,
-        ticker:    [{ id: g.userTeamId, text: `You bid ${cr(newBid)}` }, ...g.ticker].slice(0, 12),
+        timer:     bidTimer(lotPlayer(g)),
+        tmax:      bidTimer(lotPlayer(g)),
+        ticker:    [{ id: g.userTeamId, kind: "bid", text: `You bid ${cr(newBid)}` }, ...g.ticker].slice(0, 14),
       };
     });
 
@@ -345,7 +405,7 @@ export default function IplAuctionScreen() {
       const actor  = top[Math.floor(Math.random() * top.length)];
       const wa      = walkaway(actor, s.index, s);
       let newBid    = s.asking;
-      if (Math.random() < 0.22 && wa >= s.asking + inc(s.asking) * 2) {
+      if (Math.random() < actor.jump * 0.6 && wa >= s.asking + inc(s.asking) * 2) {
         newBid = round2(s.asking + inc(s.asking));
       }
       newBid = round2(Math.min(newBid, wa, actor.purse));
@@ -360,23 +420,15 @@ export default function IplAuctionScreen() {
     return resolve(finalState);
   });
 
-  // Autopilot: simulate every remaining lot with ALL 10 teams — including the
-  // user's — bidding via the same squad-need valuation. No team is guaranteed
-  // wins; the budget-pacing + marginal-need engine makes every franchise build
-  // a balanced 18-22 squad and spend ~90-100% of its purse (see data/sim_test.mjs).
-  const simulateAllRemainingLots = (g) => {
+  // Core fast-sim: resolve lots [startIdx, endIdx) instantly with ALL 10 teams —
+  // including the user's — bidding via the same squad-need valuation. Used by
+  // both Autopilot (to the end) and fast-forward (to the next starred lot).
+  const simulateLots = (g, startIdx, endIdx) => {
     let state = { ...g };
-
-    // If the current lot is already resolved (sold/unsold), start from next lot
-    // so we don't re-resolve the same player.
-    const startIdx = state.phase === "sold" ? state.index + 1 : state.index;
-
-    // Nothing left to simulate — go straight to Pick XI
-    if (startIdx >= PLAYERS.length) return { ...state, phase: "pickxi" };
-
-    for (let lotIdx = startIdx; lotIdx < PLAYERS.length; lotIdx++) {
-      const p             = PLAYERS[lotIdx];
-      const lotsLeft      = PLAYERS.length - lotIdx;
+    for (let lotIdx = startIdx; lotIdx < endIdx; lotIdx++) {
+      const pIdx          = state.order[lotIdx];
+      const p             = PLAYERS[pIdx];
+      const lotsLeft      = state.order.length - lotIdx;
       const activeNeeders = needersCount(state);
 
       let s = {
@@ -384,10 +436,9 @@ export default function IplAuctionScreen() {
         phase: "bidding", index: lotIdx,
         asking: p.base, bid: null, leader: null,
         userPassed: false, recentBid: {}, lastSold: null,
-        ticker: [{ id: "sys", text: `Auto — ${p.name}` }, ...state.ticker].slice(0, 12),
       };
 
-      const getWA = (t) => valuation(t, p, vals[lotIdx][t.id], lotsLeft, activeNeeders);
+      const getWA = (t) => valuation(t, p, vals[pIdx][t.id], lotsLeft, activeNeeders);
 
       for (let i = 0; i < 400; i++) {
         const cand    = s.teams.filter((t) => t.id !== s.leader && t.squad.length < MAX_SQUAD && t.purse >= s.asking);
@@ -398,7 +449,7 @@ export default function IplAuctionScreen() {
         const actor  = top[Math.floor(Math.random() * top.length)];
         const wa     = getWA(actor);
         let newBid   = s.asking;
-        if (Math.random() < 0.25 && wa >= s.asking + inc(s.asking) * 2)
+        if (Math.random() < actor.jump * 0.6 && wa >= s.asking + inc(s.asking) * 2)
           newBid = round2(s.asking + inc(s.asking));
         newBid = round2(Math.min(newBid, wa, actor.purse));
         s = { ...s, leader: actor.id, bid: newBid, asking: round2(newBid + inc(newBid)) };
@@ -406,9 +457,65 @@ export default function IplAuctionScreen() {
 
       state = resolve(s);
     }
+    return state;
+  };
 
+  // Autopilot: fast-sim to the end of the order, run the unsold re-auction
+  // round if needed, then go to Pick XI.
+  const simulateAllRemainingLots = (g) => {
+    let state = { ...g };
+    let startIdx = state.phase === "sold" ? state.index + 1 : state.index;
+    for (let pass = 0; pass < 2; pass++) {
+      state = simulateLots(state, startIdx, state.order.length);
+      if (state.unsold.length && !state.reauctioned) {
+        state = {
+          ...state,
+          order: [...state.order, ...state.unsold],
+          ticker: [{ id: "sys", kind: "set", text: `RE-AUCTION ROUND — ${state.unsold.length} unsold players return` }, ...state.ticker].slice(0, 14),
+          unsold: [], reauctioned: true,
+        };
+        startIdx = state.index + 1;
+      } else break;
+    }
     return { ...state, phase: "pickxi" };
   };
+
+  // Index of the next starred lot strictly after the current one (-1 = none).
+  const nextWatchedIdx = (g) => {
+    for (let i = g.index + 1; i < g.order.length; i++)
+      if (g.watch.has(PLAYERS[g.order[i]].name)) return i;
+    return -1;
+  };
+
+  // Fast-forward: autopilot through lots you don't care about, hand control
+  // back when the next starred player comes on the block.
+  const fastForward = () => setGame((g) => {
+    if (g.phase !== "bidding" && g.phase !== "sold") return g;
+    const stop = nextWatchedIdx(g);
+    if (stop < 0) return g;
+    const startIdx = g.phase === "sold" ? g.index + 1 : g.index;
+    const skipped  = stop - startIdx;
+    let state = simulateLots(g, startIdx, stop);
+    const np = PLAYERS[state.order[stop]];
+    return {
+      ...state,
+      phase:      "bidding",
+      index:      stop,
+      asking:     np.base,
+      bid:        null,
+      leader:     null,
+      timer:      openTimer(np),
+      tmax:       openTimer(np),
+      userPassed: false,
+      recentBid:  {},
+      lastSold:   null,
+      ticker: [
+        { id: "sys", text: `On the block — ${np.name}` },
+        { id: "sys", kind: "story", text: `⏩ fast-forwarded ${skipped} lots to your starred player` },
+        ...state.ticker,
+      ].slice(0, 14),
+    };
+  });
 
   const [apConfirm, setApConfirm] = useState(false);
 
@@ -430,7 +537,19 @@ export default function IplAuctionScreen() {
 
   const me         = game.teams.find((t) => t.isUser);
   const myTeamDef  = TEAMS.find((t) => t.id === game.userTeamId);
-  const p          = PLAYERS[game.index];
+  const p          = PLAYERS[game.order[game.index]];
+  // Which of MY unfilled blueprint slots does this lot fill? (need chip)
+  const myCounts   = squadCatCounts(me.squad);
+  const fillsNeeds = playerCats(p)
+    .filter((k) => (myCounts[k] || 0) < (CAT_TARGET[k] || 2))
+    .map((k) => ({ k, have: myCounts[k] || 0, target: CAT_TARGET[k] || 2 }));
+  // Set chapter progress: lots in this set / position within it
+  const setLots    = game.order.filter((i) => PLAYERS[i].set === p.set);
+  const setPos     = game.order.slice(0, game.index + 1).filter((i) => PLAYERS[i].set === p.set).length;
+  const ffStop     = (game.phase === "bidding" || game.phase === "sold") ? nextWatchedIdx(game) : -1;
+  // Auctioneer beat: only when someone holds a live bid and the clock runs out
+  const goingBeat  = game.phase === "bidding" && game.leader && game.timer <= 3
+    ? (game.timer <= 1.5 ? "GOING TWICE…" : "GOING ONCE…") : null;
   const frac       = game.timer / game.tmax;
   const ringColor  = frac < 0.3 ? "#FF5A5F" : game.leader === game.userTeamId ? "#3DDC97" : "#F5C451";
   const leaderTeam = game.leader ? TEAMS.find((t) => t.id === game.leader) : null;
@@ -460,7 +579,7 @@ export default function IplAuctionScreen() {
         <div className="hd-stats">
           <div className="hd-stat">
             <div className="hd-stat-lbl">LOT</div>
-            <div className="hd-stat-val">{game.index + 1} / {PLAYERS.length}</div>
+            <div className="hd-stat-val">{game.index + 1} / {game.order.length}</div>
           </div>
           <div className="hd-stat hd-stat-gold">
             <div className="hd-stat-lbl">PURSE</div>
@@ -476,7 +595,7 @@ export default function IplAuctionScreen() {
       {/* ── BUDGET PACE WARNING ── */}
       {started && game.phase === "bidding" && (() => {
         const slotsLeft   = Math.max(0, SQUAD_TARGET - me.squad.length);
-        const lotsLeft    = PLAYERS.length - game.index;
+        const lotsLeft    = game.order.length - game.index;
         const pursePerSlot = slotsLeft > 0 ? me.purse / slotsLeft : 999;
         // Warn if purse-per-remaining-slot is below ₹1 Cr AND still more than 3 slots to fill
         const tooThin = slotsLeft >= 4 && pursePerSlot < 1.0;
@@ -493,7 +612,21 @@ export default function IplAuctionScreen() {
         );
       })()}
 
-      {game.phase === "pickxi" ? (
+      {game.phase === "watchlist" ? (
+        <WatchlistScreen
+          teamDef={myTeamDef}
+          onBegin={(watch) => setGame((g) => ({
+            ...g,
+            watch,
+            phase: "bidding",
+            ticker: [
+              { id: "sys", kind: "set", text: PLAYERS[g.order[0]].set },
+              ...(watch.size ? [{ id: "sys", kind: "story", text: `${watch.size} players starred — use ⏩ to jump between them` }] : []),
+              ...g.ticker,
+            ].slice(0, 14),
+          }))}
+        />
+      ) : game.phase === "pickxi" ? (
         <PickXIScreen squad={me.squad} onLock={lockXI} teams={game.teams} userTeamId={game.userTeamId} />
       ) : game.phase === "done" ? (
         <Summary me={me} teams={game.teams} onRestart={restart} />
@@ -524,9 +657,16 @@ export default function IplAuctionScreen() {
 
             {/* PLAYER STAGE */}
             <div className="stage">
+              {/* Set chapter strip — where we are in the auction's story */}
+              <div className="set-strip">
+                <span className="set-strip-name">{p.set}</span>
+                <span className="set-strip-pos">{setPos} of {setLots.length} in set</span>
+              </div>
+
               <div className="stage-eyebrow">
-                <span>LOT {String(game.index + 1).padStart(2, "0")} / {String(PLAYERS.length).padStart(2, "0")}</span>
+                <span>LOT {String(game.index + 1).padStart(2, "0")} / {String(game.order.length).padStart(2, "0")}</span>
                 <span className="tier-pill">{tierLabel(p.tier)}</span>
+                {game.watch.has(p.name) && <span className="tier-pill star-pill">★ STARRED</span>}
               </div>
 
               <h1 className="stage-name">{p.name}</h1>
@@ -534,7 +674,28 @@ export default function IplAuctionScreen() {
               <div className="stage-chips">
                 <span className="chip">{p.role}</span>
                 <span className="chip">{p.country}{p.overseas ? " · Overseas" : ""}</span>
+                {p.role !== "Bowler" && p.batOrder && <span className="chip chip-arch">{{ top: "TOP ORDER", mid: "MIDDLE ORDER", lower: "LOWER ORDER" }[p.batOrder]}</span>}
+                {p.bowlPhase && <span className="chip chip-arch">{{ pp: "POWERPLAY", mid: "MIDDLE OVERS", death: "DEATH OVERS" }[p.bowlPhase]}{p.bowlType ? ` · ${p.bowlType.toUpperCase()}` : ""}</span>}
+                {p.finisher && <span className="chip chip-fin">FINISHER</span>}
               </div>
+
+              {/* Real career stats from Cricsheet — bid like you know the player */}
+              <div className="stat-strip">
+                {p.role !== "Bowler" && p.stat?.sr != null && <div className="stat-cell"><span className="stat-val">{Math.round(p.stat.sr)}</span><span className="stat-lbl">STRIKE RATE</span></div>}
+                {p.role !== "Bowler" && p.stat?.avg != null && <div className="stat-cell"><span className="stat-val">{p.stat.avg.toFixed(1)}</span><span className="stat-lbl">AVERAGE</span></div>}
+                {p.bowlType && p.stat?.econ != null && <div className="stat-cell"><span className="stat-val">{p.stat.econ.toFixed(2)}</span><span className="stat-lbl">ECONOMY</span></div>}
+                {p.bowlType && p.stat?.wkts != null && <div className="stat-cell"><span className="stat-val">{p.stat.wkts}</span><span className="stat-lbl">WICKETS</span></div>}
+                <div className="stat-cell"><span className="stat-val stat-gold">{p.rating}</span><span className="stat-lbl">RATING</span></div>
+              </div>
+
+              {/* Squad-fit: does this lot fill one of YOUR unmet slots? */}
+              {fillsNeeds.length > 0 ? (
+                <div className="need-chip need-yes">
+                  FILLS YOUR NEED: {fillsNeeds.slice(0, 2).map(({ k, have, target }) => `${CAT_LABEL[k]} (${have}/${target})`).join(" · ")}
+                </div>
+              ) : (
+                <div className="need-chip need-no">Position covered — you're set here</div>
+              )}
 
               <div className="stage-main">
                 <div className="stage-left">
@@ -570,7 +731,8 @@ export default function IplAuctionScreen() {
                           : <span className="lead-none">no bids yet</span>
                       }
                     </div>
-                    <div className="bid-base">base {cr(p.base)} · reserve {cr(p.mv * 0.6)}</div>
+                    {goingBeat && <div className="going-beat">{goingBeat}</div>}
+                    <div className="bid-base">base price {cr(p.base)}</div>
                   </div>
                 </div>
 
@@ -600,6 +762,13 @@ export default function IplAuctionScreen() {
                     )}
                   </div>
 
+                  {/* Fast-forward — autopilot until the next starred player */}
+                  {ffStop >= 0 && (
+                    <button className="ff-btn" onClick={fastForward}>
+                      ⏩ Skip to next ★ ({PLAYERS[game.order[ffStop]].name} · lot {ffStop + 1})
+                    </button>
+                  )}
+
                   {/* Autopilot — let AI finish the auction for MI */}
                   <div className="ap-wrap">
                     {apConfirm ? (
@@ -628,7 +797,7 @@ export default function IplAuctionScreen() {
                   </div>
                   {!game.lastSold.unsold && (
                     <div className="stamp-sub">
-                      {TEAMS.find((t) => t.id === game.lastSold.teamId).name} · {cr(game.lastSold.price)}
+                      <b>{game.lastSold.player.name}</b> → {TEAMS.find((t) => t.id === game.lastSold.teamId).name} · {cr(game.lastSold.price)}
                     </div>
                   )}
                 </div>
@@ -665,6 +834,9 @@ export default function IplAuctionScreen() {
                               <span className="tc-purse" style={leading ? { color: td.color } : undefined}>{cr(ts.purse)}</span>
                               <span className="tc-bought">{ts.squad.length} bought ▸</span>
                             </div>
+                            <div className="tc-bar">
+                              <div className="tc-bar-fill" style={{ width: `${(ts.purse / 120) * 100}%`, background: td.color }} />
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -684,9 +856,10 @@ export default function IplAuctionScreen() {
               <div className="ticker">
                 {game.ticker.map((line, i) => {
                   const tm = TEAMS.find((t) => t.id === line.id);
+                  const kindCls = line.kind ? ` tick-${line.kind}` : "";
                   return (
-                    <div key={i} className={`tick${i === 0 ? " tick-new" : ""}`}>
-                      <span className="tick-dot" style={{ background: tm ? tm.color : "#5b647a" }} />
+                    <div key={i} className={`tick${i === 0 ? " tick-new" : ""}${kindCls}`}>
+                      {line.kind !== "set" && <span className="tick-dot" style={{ background: tm ? tm.color : "#5b647a" }} />}
                       <span>{line.text}</span>
                     </div>
                   );
@@ -795,6 +968,84 @@ function StartScreen({ onStart }) {
           Enter the auction <ChevronRight size={16} />
         </button>
         <span className="start-note">{PLAYERS.length} real IPL players · archetypes from Cricsheet ball-by-ball data.</span>
+      </div>
+    </div>
+  );
+}
+
+/* ── Watchlist: star targets before the auction; ⏩ jumps between them ── */
+function WatchlistScreen({ teamDef, onBegin }) {
+  const [watch, setWatch] = useState(new Set());
+  const [query, setQuery] = useState("");
+
+  const toggle = (name) =>
+    setWatch((w) => {
+      const n = new Set(w);
+      n.has(name) ? n.delete(name) : n.add(name);
+      return n;
+    });
+
+  // Group players by auction set, preserving set order
+  const sets = [];
+  let cur = null;
+  for (const p of PLAYERS) {
+    if (!cur || cur.label !== p.set) { cur = { label: p.set, players: [] }; sets.push(cur); }
+    cur.players.push(p);
+  }
+  const q = query.trim().toLowerCase();
+
+  return (
+    <div className="wl">
+      <div className="wl-hd">
+        <div>
+          <div className="pxi-title">Star Your Targets</div>
+          <div className="pxi-sub">
+            Star the players you want to bid on live — during the auction, <b>⏩</b> autopilots
+            everything in between (your team still builds its squad) and stops at your next star.
+          </div>
+        </div>
+        <div className="wl-actions">
+          <span className="wl-count" style={{ color: teamDef.color }}>★ {watch.size} starred</span>
+          <button className="bid-btn" onClick={() => onBegin(watch)}>
+            {watch.size ? "Begin auction →" : "Skip — watch every lot →"}
+          </button>
+        </div>
+      </div>
+
+      <input
+        className="wl-search"
+        placeholder="Search players…"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+      />
+
+      <div className="wl-body">
+        {sets.map((s) => {
+          const players = q ? s.players.filter((p) => p.name.toLowerCase().includes(q)) : s.players;
+          if (!players.length) return null;
+          return (
+            <div key={s.label} className="wl-set">
+              <div className="wl-set-label">{s.label}</div>
+              <div className="wl-grid">
+                {players.map((p) => {
+                  const on = watch.has(p.name);
+                  return (
+                    <button
+                      key={p.name}
+                      className={`wl-card${on ? " wl-on" : ""}`}
+                      style={on ? { borderColor: teamDef.color, boxShadow: `0 0 0 1px ${teamDef.color}66` } : undefined}
+                      onClick={() => toggle(p.name)}
+                    >
+                      <span className="wl-star" style={{ color: on ? teamDef.color : "#3a4154" }}>★</span>
+                      <span className="wl-name">{p.name}</span>
+                      <span className="wl-meta">{roleShort(p.role)}{p.overseas ? " · OS" : ""} · ★{p.rating}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -1099,6 +1350,7 @@ function PickXIScreen({ squad, onLock, teams = [], userTeamId }) {
 const styles = `
 .auc {
   position: relative;
+  --display-font: 'Barlow Condensed', 'Arial Narrow', ui-sans-serif, sans-serif;
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
   color: #EAEEF7;
   background:
@@ -1204,8 +1456,10 @@ const styles = `
   font-size: 10px;
 }
 .stage-name {
-  font-size: clamp(28px, 4vw, 42px); font-weight: 850;
-  letter-spacing: -.025em; margin: 8px 0 0; line-height: 1;
+  font-family: var(--display-font);
+  font-size: clamp(34px, 4.6vw, 52px); font-weight: 800;
+  letter-spacing: .01em; text-transform: uppercase;
+  margin: 8px 0 0; line-height: 1;
 }
 .stage-chips { display: flex; gap: 7px; margin-top: 9px; flex-wrap: wrap; }
 .chip {
@@ -1227,7 +1481,7 @@ const styles = `
 .ring-secs  { font-size: 10.5px; font-weight: 700; margin-top: 1px; }
 .bid-block  { flex: 0 1 auto; min-width: 130px; }
 .bid-lbl    { font-size: 10px; letter-spacing: .15em; color: #8A93A8; font-weight: 700; }
-.bid-num    { font-size: clamp(26px, 4vw, 44px); font-weight: 850; letter-spacing: -.02em; color: #F5C451; line-height: 1.05; }
+.bid-num    { font-family: var(--display-font); font-size: clamp(30px, 4.4vw, 50px); font-weight: 800; letter-spacing: .01em; color: #F5C451; line-height: 1.05; }
 .bid-leader { margin-top: 5px; font-size: 12.5px; font-weight: 700; }
 .lead-you   { color: #3DDC97; }
 .lead-none  { color: #6B7488; font-weight: 500; }
@@ -1279,9 +1533,10 @@ const styles = `
   border: none; cursor: pointer;
   background: linear-gradient(155deg,#F5C451,#D89B22); color: #1a1304;
   font-weight: 800; font-size: 14px; padding: 11px 20px; border-radius: 10px;
+  min-height: 44px;
   box-shadow: 0 8px 20px -8px rgba(245,196,81,.65);
   transition: filter .15s, transform .08s;
-  display: inline-flex; align-items: center; gap: 6px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
 }
 .bid-btn:hover:not(:disabled) { filter: brightness(1.07); }
 .bid-btn:active:not(:disabled) { transform: scale(.98); }
@@ -1290,6 +1545,7 @@ const styles = `
   border: 1px solid rgba(255,255,255,.15); background: transparent;
   color: #C7CEDD; cursor: pointer; font-size: 12.5px; font-weight: 600;
   padding: 9px 16px; border-radius: 9px; transition: background .15s;
+  min-height: 44px;
 }
 .out-btn:hover { background: rgba(255,255,255,.06); }
 .passed-tag  { font-size: 12px; color: #8A93A8; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.09); padding: 9px 14px; border-radius: 9px; text-align: center; }
@@ -1384,7 +1640,7 @@ const styles = `
 /* summary */
 .summary { padding: 24px 4px; }
 .sum-eye   { font-size: 10.5px; letter-spacing: .18em; color: #8A93A8; font-weight: 700; }
-.sum-title { font-size: 34px; font-weight: 850; margin: 6px 0 0; letter-spacing: -.02em; }
+.sum-title { font-family: var(--display-font); text-transform: uppercase; font-size: 40px; font-weight: 800; margin: 6px 0 0; letter-spacing: .01em; }
 .sum-stats { display: flex; gap: 24px; margin-top: 14px; flex-wrap: wrap; font-size: 13px; color: #AEB6C7; }
 .sum-stats b { font-size: 22px; font-weight: 850; color: #fff; display: block; margin-bottom: 2px; }
 .squad-chips-row { display: flex; gap: 7px; flex-wrap: wrap; }
@@ -1455,7 +1711,7 @@ const styles = `
   padding-bottom: 16px; margin-bottom: 16px;
   border-bottom: 1px solid rgba(255,255,255,.07);
 }
-.pxi-title { font-size: 28px; font-weight: 850; letter-spacing: -.02em; }
+.pxi-title { font-family: var(--display-font); text-transform: uppercase; font-size: 32px; font-weight: 800; letter-spacing: .01em; }
 .pxi-sub   { font-size: 12.5px; color: #8A93A8; margin-top: 5px; }
 .pxi-warn  { font-size: 11px; color: #FF5A5F; font-weight: 700; letter-spacing: .02em; text-align: right; }
 .pxi-lock  { font-size: 15px; padding: 11px 22px; }
@@ -1583,6 +1839,108 @@ const styles = `
 }
 .arr-btn:hover:not(:disabled) { background: rgba(255,255,255,.14); }
 .arr-btn:disabled { opacity: .25; cursor: default; }
+
+/* ── auction theater additions ── */
+/* set chapter strip */
+.set-strip {
+  display: flex; align-items: center; justify-content: space-between;
+  margin: -4px 0 10px; padding: 6px 12px;
+  background: rgba(245,196,81,.07); border: 1px solid rgba(245,196,81,.18);
+  border-radius: 8px;
+}
+.set-strip-name { font-size: 11px; font-weight: 800; letter-spacing: .12em; color: #F5C451; }
+.set-strip-pos  { font-size: 10.5px; color: #8A93A8; }
+
+.star-pill { background: rgba(245,196,81,.15) !important; color: #F5C451 !important; border-color: rgba(245,196,81,.4) !important; }
+.chip-arch { color: #9fb6d9; }
+.chip-fin  { color: #a78bfa; border-color: rgba(167,139,250,.35); }
+
+/* real-stat strip */
+.stat-strip {
+  display: flex; gap: 18px; margin: 10px 0 8px;
+  padding: 10px 14px; background: rgba(255,255,255,.03);
+  border: 1px solid rgba(255,255,255,.07); border-radius: 10px;
+  width: fit-content;
+}
+.stat-cell { display: flex; flex-direction: column; gap: 1px; }
+.stat-val  { font-size: 18px; font-weight: 800; color: #EAEEF7; font-family: var(--display-font); letter-spacing: .02em; }
+.stat-gold { color: #F5C451; }
+.stat-lbl  { font-size: 8.5px; font-weight: 700; letter-spacing: .1em; color: #6B7488; }
+
+/* squad-need chip */
+.need-chip {
+  display: inline-block; margin-bottom: 8px;
+  font-size: 11px; font-weight: 700; letter-spacing: .04em;
+  padding: 5px 11px; border-radius: 7px; border: 1px solid;
+}
+.need-yes { color: #3DDC97; background: rgba(61,220,151,.08); border-color: rgba(61,220,151,.3); }
+.need-no  { color: #6B7488; background: rgba(255,255,255,.03); border-color: rgba(255,255,255,.08); }
+
+/* auctioneer beat */
+.going-beat {
+  margin-top: 4px; font-size: 13px; font-weight: 900; letter-spacing: .22em;
+  color: #FF5A5F; animation: beat-pulse .5s ease-in-out infinite alternate;
+}
+@keyframes beat-pulse { from { opacity: .55; } to { opacity: 1; } }
+
+/* fast-forward button */
+.ff-btn {
+  width: 100%; margin-top: 8px; min-height: 38px;
+  background: rgba(245,196,81,.1); border: 1px solid rgba(245,196,81,.35);
+  color: #F5C451; font-size: 12px; font-weight: 700;
+  border-radius: 9px; cursor: pointer; padding: 8px 10px;
+  transition: background .15s;
+}
+.ff-btn:hover { background: rgba(245,196,81,.18); }
+
+/* purse depletion bar on team cards */
+.tc-bar {
+  margin-top: 5px; height: 3px; border-radius: 99px;
+  background: rgba(255,255,255,.07); overflow: hidden;
+}
+.tc-bar-fill { height: 100%; border-radius: 99px; transition: width .4s; }
+
+/* feed entry kinds */
+.tick-sold  { color: #F5C451; font-weight: 700; }
+.tick-story { color: #9fb6d9; font-style: italic; }
+.tick-set   {
+  color: #F5C451; font-weight: 800; font-size: 10.5px; letter-spacing: .1em;
+  border-top: 1px solid rgba(245,196,81,.25); border-bottom: 1px solid rgba(245,196,81,.25);
+  padding: 5px 0; margin: 2px 0;
+}
+
+/* ── watchlist screen ── */
+.wl { padding: 4px 2px; }
+.wl-hd {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  gap: 16px; margin-bottom: 14px;
+}
+.wl-hd .pxi-sub { max-width: 560px; line-height: 1.5; }
+.wl-actions { display: flex; align-items: center; gap: 14px; flex: none; }
+.wl-count { font-size: 13px; font-weight: 800; }
+.wl-search {
+  width: 100%; margin-bottom: 14px; padding: 10px 14px;
+  background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1);
+  border-radius: 10px; color: #EAEEF7; font-size: 13px; outline: none;
+}
+.wl-search:focus { border-color: rgba(245,196,81,.4); }
+.wl-body { max-height: 60vh; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; padding-right: 6px; }
+.wl-set-label {
+  font-size: 10px; font-weight: 800; letter-spacing: .12em; color: #F5C451;
+  margin-bottom: 7px; padding-bottom: 4px; border-bottom: 1px solid rgba(245,196,81,.15);
+}
+.wl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 6px; }
+.wl-card {
+  display: flex; align-items: center; gap: 8px; text-align: left;
+  background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.08);
+  border-radius: 9px; padding: 8px 10px; cursor: pointer;
+  transition: background .12s, border-color .12s;
+}
+.wl-card:hover { background: rgba(255,255,255,.07); }
+.wl-on { background: rgba(255,255,255,.06); }
+.wl-star { font-size: 14px; flex: none; }
+.wl-name { font-size: 12px; font-weight: 700; color: #EAEEF7; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wl-meta { font-size: 9.5px; color: #6B7488; flex: none; }
 
 /* budget pace warning banner */
 .budget-warn {
