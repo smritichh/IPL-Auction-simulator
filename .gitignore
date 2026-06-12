@@ -3,3 +3,5 @@ dist/
 .design-audit/
 .DS_Store
 *.log
+.gstack/
+ipl-app/.shots/
