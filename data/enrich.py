@@ -109,11 +109,15 @@ def derive(name, role, tier):
 # read base data (idempotent source: input != output)
 base = json.load(open(BASE_JSON))
 rows = []
+current_set = "ACCELERATED ROUND"
 for entry in base:
     name, role, country, base_price, mv, tier = entry[0], entry[1], entry[2], float(entry[3]), float(entry[4]), entry[5]
     comment = entry[6] if len(entry) > 6 else None
+    if comment:
+        current_set = comment
     cmt = f"// {comment}" if comment else None
     d = derive(name, role, tier)
+    d["set"] = current_set
     rows.append((cmt, name, role, country, base_price, mv, tier, d))
 
 print(f"parsed {len(rows)} players")
@@ -152,7 +156,7 @@ for (cmt, name, role, country, base, mv, tier, d) in rows:
         f'rating: {d["rating"]}, batOrder: "{d["batOrder"]}", '
         f'bowlType: {json.dumps(d["bowlType"])}, bowlPhase: {json.dumps(d["bowlPhase"])}, '
         f'deathSpec: {str(d["deathSpec"]).lower()}, wk: {str(bool(d["wk"])).lower()}, '
-        f'finisher: {str(d["finisher"]).lower()}, stat: {{{stbits}}} }},'
+        f'finisher: {str(d["finisher"]).lower()}, set: {json.dumps(d["set"])}, stat: {{{stbits}}} }},'
     )
 out.append("];\n\nexport default PLAYERS;")
 open(OUT_JS,"w").write("\n".join(out)+"\n")
