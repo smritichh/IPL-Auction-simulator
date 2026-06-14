@@ -149,7 +149,7 @@ const cr        = (v) => `₹${Number(v).toFixed(2)} Cr`;
 const inc       = (p) => (p < 5 ? 0.5 : p < 12 ? 1.0 : 2.0);
 const round2    = (v) => Math.round(v * 100) / 100;
 const initials  = (n) => n.split(" ").map((w) => w[0]).slice(0, 2).join("");
-const roleColor = (r) => ({ WK: "#FFB74D", Batter: "#4FC3F7", "All-rounder": "#81C784", Bowler: "#E57373" }[r] ?? "#8A93A8");
+const roleColor = (r) => ({ WK: "#C8851A", Batter: "#2E86C8", "All-rounder": "#3E9E54", Bowler: "#D04A4A" }[r] ?? "#677087");
 const roleShort = (r) => ({ WK: "WK", Batter: "BAT", "All-rounder": "AR", Bowler: "BWL" }[r] ?? r);
 // Batting position auto-sort: WK→openers, Batters, ARs, Bowlers
 const ROLE_ORDER = { WK: 0, Batter: 1, "All-rounder": 2, Bowler: 3 };
@@ -213,7 +213,7 @@ export default function IplAuctionScreen() {
 
   const initGame = (teamId = "MI") => ({
     userTeamId:  teamId,
-    phase:       "watchlist",                       // star your targets before lot 1
+    phase:       "bidding",                         // auction starts immediately on lot 1
     order:       PLAYERS.map((_, i) => i),          // lot sequence (player indices)
     unsold:      [],                                // player indices passed in by all 10 teams
     reauctioned: false,                             // unsold round runs once
@@ -226,7 +226,7 @@ export default function IplAuctionScreen() {
     tmax:        openTimer(PLAYERS[0]),
     userPassed:  false,
     teams:       TEAMS.map((t) => ({ ...t, isUser: t.id === teamId, purse: 120, squad: [], bias: makeBias() })),
-    ticker:      [{ id: "sys", text: `On the block — ${PLAYERS[0].name}` }],
+    ticker:      [{ id: "sys", text: `On the block — ${PLAYERS[0].name}` }, { id: "sys", kind: "set", text: PLAYERS[0].set }],
     soldLog:     [],
     lastSold:    null,
     recentBid:   {},
@@ -519,6 +519,41 @@ export default function IplAuctionScreen() {
     };
   });
 
+  // Index of the first lot belonging to a set after the current one (-1 = current set is last).
+  const nextSetIdx = (g) => {
+    const curSet = PLAYERS[g.order[g.index]].set;
+    for (let i = g.index + 1; i < g.order.length; i++)
+      if (PLAYERS[g.order[i]].set !== curSet) return i;
+    return -1;
+  };
+
+  // Skip the rest of the current set — the AI resolves every remaining lot in it
+  // (your team still bids via the same engine) and hands control back at the
+  // first lot of the next set. If this is the last set, finish the auction.
+  const skipSet = () => setGame((g) => {
+    if (g.phase !== "bidding" && g.phase !== "sold") return g;
+    const startIdx = g.phase === "sold" ? g.index + 1 : g.index;
+    const stop = nextSetIdx(g);
+    if (stop < 0) {
+      const state = simulateLots(g, startIdx, g.order.length);
+      return simulateAllRemainingLots(state);
+    }
+    const state = simulateLots(g, startIdx, stop);
+    const np = PLAYERS[state.order[stop]];
+    return {
+      ...state,
+      phase: "bidding", index: stop,
+      asking: np.base, bid: null, leader: null,
+      timer: openTimer(np), tmax: openTimer(np),
+      userPassed: false, recentBid: {}, lastSold: null,
+      ticker: [
+        { id: "sys", text: `On the block — ${np.name}` },
+        { id: "sys", kind: "set", text: np.set },
+        ...state.ticker,
+      ].slice(0, 14),
+    };
+  });
+
   const [apConfirm, setApConfirm] = useState(false);
 
   // Keep the ref in sync so tick() can read it without closure staleness
@@ -553,7 +588,7 @@ export default function IplAuctionScreen() {
   const goingBeat  = game.phase === "bidding" && game.leader && game.timer <= 3
     ? (game.timer <= 1.5 ? "GOING TWICE…" : "GOING ONCE…") : null;
   const frac       = game.timer / game.tmax;
-  const ringColor  = frac < 0.3 ? "#FF5A5F" : game.leader === game.userTeamId ? "#3DDC97" : "#F5C451";
+  const ringColor  = frac < 0.3 ? "#DC3A40" : game.leader === game.userTeamId ? "#12A06A" : "#B5800F";
   const leaderTeam = game.leader ? TEAMS.find((t) => t.id === game.leader) : null;
   const canAfford  = me.purse >= game.asking;
   const R = 40, C = 2 * Math.PI * R;
@@ -614,21 +649,7 @@ export default function IplAuctionScreen() {
         );
       })()}
 
-      {game.phase === "watchlist" ? (
-        <WatchlistScreen
-          teamDef={myTeamDef}
-          onBegin={(watch) => setGame((g) => ({
-            ...g,
-            watch,
-            phase: "bidding",
-            ticker: [
-              { id: "sys", kind: "set", text: PLAYERS[g.order[0]].set },
-              ...(watch.size ? [{ id: "sys", kind: "story", text: `${watch.size} players starred — use ⏩ to jump between them` }] : []),
-              ...g.ticker,
-            ].slice(0, 14),
-          }))}
-        />
-      ) : game.phase === "pickxi" ? (
+      {game.phase === "pickxi" ? (
         <PickXIScreen squad={me.squad} onLock={lockXI} teams={game.teams} userTeamId={game.userTeamId} />
       ) : game.phase === "season" ? (
         <SeasonScreen teams={game.teams} userTeamId={game.userTeamId} userXI={game.xi} onRestart={restart} />
@@ -706,7 +727,7 @@ export default function IplAuctionScreen() {
                   {/* Timer ring */}
                   <div className="ring-wrap">
                     <svg width="92" height="92" viewBox="0 0 92 92">
-                      <circle cx="46" cy="46" r={R} stroke="rgba(255,255,255,.08)" strokeWidth="6" fill="none" />
+                      <circle cx="46" cy="46" r={R} stroke="rgba(20,30,50,.08)" strokeWidth="6" fill="none" />
                       <circle
                         cx="46" cy="46" r={R} stroke={ringColor} strokeWidth="6" fill="none"
                         strokeLinecap="round" strokeDasharray={C}
@@ -766,10 +787,10 @@ export default function IplAuctionScreen() {
                     )}
                   </div>
 
-                  {/* Fast-forward — autopilot until the next starred player */}
-                  {ffStop >= 0 && (
-                    <button className="ff-btn" onClick={fastForward}>
-                      ⏩ Skip to next ★ ({PLAYERS[game.order[ffStop]].name} · lot {ffStop + 1})
+                  {/* Skip the rest of this set — autopilot to the next set */}
+                  {(game.phase === "bidding" || game.phase === "sold") && (
+                    <button className="ff-btn" onClick={skipSet}>
+                      ⏩ Skip rest of this set
                     </button>
                   )}
 
@@ -903,7 +924,7 @@ export default function IplAuctionScreen() {
                 <span className="tc-badge" style={{ background: td.color, color: td.text, fontSize: 13 }}>{td.short}</span>
                 <div>
                   <div style={{ fontWeight: 700, fontSize: 15 }}>{td.name}</div>
-                  <div style={{ fontSize: 12, color: "#8A93A8" }}>{squad.length} players · {cr(ts.purse)} left</div>
+                  <div style={{ fontSize: 12, color: "#677087" }}>{squad.length} players · {cr(ts.purse)} left</div>
                 </div>
                 <button className="modal-close" onClick={() => setSquadView(null)}>✕</button>
               </div>
@@ -914,7 +935,7 @@ export default function IplAuctionScreen() {
                       <div key={i} className="modal-row">
                         <span className="modal-role" style={{ color: roleColor(s.role) }}>{roleShort(s.role)}</span>
                         <span className="modal-name">{s.name}</span>
-                        <span className="modal-country" style={{ color: s.overseas ? "#F5C451" : "#6B7488" }}>{s.country}{s.overseas ? " ✈" : ""}</span>
+                        <span className="modal-country" style={{ color: s.overseas ? "#B5800F" : "#6B7488" }}>{s.country}{s.overseas ? " ✈" : ""}</span>
                         <span className="modal-price">{cr(s.price)}</span>
                       </div>
                     ))}
@@ -1118,16 +1139,23 @@ function SeasonScreen({ teams, userTeamId, userXI, onRestart }) {
 
   const userMatch = lastRound?.find((m) => m.home === userTeamId || m.away === userTeamId);
 
+  const userPos = table_.findIndex((r) => r.id === userTeamId) + 1;
+  const userQualified = top4.includes(userTeamId);
+
   if (view === "playoffs")
     return <PlayoffsScreen teams={teams} userTeamId={userTeamId} xis={xis.current}
       seeds={top4} teamObj={teamObj} onRestart={onRestart} />;
+
+  // Didn't make the top 4 → season ends here with the user's league finish.
+  if (view === "finished")
+    return <FinishScreen position={userPos} userTeamId={userTeamId} championId={null} onRestart={onRestart} />;
 
   return (
     <div className="season">
       <div className="season-hd">
         <div>
           <div className="pxi-title">League Stage</div>
-          <div className="pxi-sub">{leagueDone ? "All 14 rounds complete — top 4 qualify for the playoffs" : `Match day ${day + 1} of 14 · ${schedule.current.length - day} to play`}</div>
+          <div className="pxi-sub">{leagueDone ? (userQualified ? `All 14 rounds done — you finished ${ordinal(userPos)} and made the top 4!` : `All 14 rounds done — you finished ${ordinal(userPos)}, outside the top 4`) : `Match day ${day + 1} of 14 · ${schedule.current.length - day} to play`}</div>
         </div>
         <div className="season-actions">
           {(orange || purple) && (
@@ -1141,8 +1169,10 @@ function SeasonScreen({ teams, userTeamId, userXI, onRestart }) {
               <button className="out-btn" onClick={() => advance(true)}>Sim rest →</button>
               <button className="bid-btn" onClick={() => advance(false)}>Next match day →</button>
             </div>
-          ) : (
+          ) : userQualified ? (
             <button className="bid-btn" onClick={() => setView("playoffs")}>Enter playoffs →</button>
+          ) : (
+            <button className="bid-btn" onClick={() => setView("finished")}>See your finish →</button>
           )}
         </div>
       </div>
@@ -1307,37 +1337,113 @@ function OverByOver({ match, label, meta, userTeamId, onDone }) {
   );
 }
 
-/* ── Playoffs: Q1 (1v2), Eliminator (3v4), Q2, Final ── */
+/* ── Final standing helpers + screen ── */
+const ordinal = (n) => {
+  const s = ["th", "st", "nd", "rd"], v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+};
+
+// End-of-season screen — always tells the user exactly where they finished.
+// position 1 = champions, 2 = runners-up, 3 = lost Q2, 4 = lost Eliminator,
+// 5-10 = missed the playoffs (league standing).
+function FinishScreen({ position, userTeamId, championId, onRestart }) {
+  const meta = (id) => TEAMS.find((t) => t.id === id);
+  const ut = meta(userTeamId);
+  const champ = championId ? meta(championId) : null;
+  const isChamp = position === 1;
+  const blurb = isChamp
+    ? "🏆 You built this squad from the auction floor. Champions."
+    : position === 2 ? `So close — runners-up.${champ ? ` ${champ.name} took the title.` : ""}`
+    : position === 3 ? `Knocked out in Qualifier 2.${champ ? ` ${champ.name} won it.` : ""}`
+    : position === 4 ? `Knocked out in the Eliminator.${champ ? ` ${champ.name} won it.` : ""}`
+    : "Missed the playoffs — only the top 4 go through.";
+  return (
+    <div className="champion">
+      <div className="champ-badge" style={{ background: ut.color, color: ut.text }}>{ut.short}</div>
+      <div className="finish-pos" style={{ color: isChamp ? "#B5800F" : "#677087" }}>
+        {isChamp ? "CHAMPIONS · 1ST" : `FINISHED ${ordinal(position).toUpperCase()}`}
+      </div>
+      <h1 className="champ-name">{ut.name}</h1>
+      <div className="champ-sub">{blurb}</div>
+      <button className="bid-btn" onClick={onRestart} style={{ marginTop: 18 }}>Run it back ↻</button>
+    </div>
+  );
+}
+
+/* ── Playoffs: Q1 (1v2), Eliminator (3v4), Q2, Final ──
+   The user plays only their own knockouts over-by-over; every other tie
+   auto-simulates the moment its inputs are known, so a champion is always
+   crowned and the user's finishing position is always resolvable. */
 function PlayoffsScreen({ teams, userTeamId, xis, seeds, teamObj, onRestart }) {
   const meta = (id) => TEAMS.find((t) => t.id === id);
   const [s1, s2, s3, s4] = seeds;
-  // bracket state: each tie holds its played match (or null) until contested
   const [ties, setTies] = useState({ q1: null, elim: null, q2: null, final: null });
   const [live, setLive] = useState(null);   // { key, label, match } while watching over-by-over
-  const champion = ties.final?.winner;
 
-  // Simulate the match up-front (deterministic), then watch it unfold over by over.
-  const play = (key, label, aId, bId) =>
-    setLive({ key, label, match: { ...simulateMatch(teamObj(aId), teamObj(bId)), home: aId, away: bId } });
+  const simMatch = (aId, bId) => ({ ...simulateMatch(teamObj(aId), teamObj(bId)), home: aId, away: bId });
+  const L = (m) => (m.winner === m.firstId ? m.secondId : m.firstId);   // loser id
 
-  // When the viewer finishes, record the result into the bracket.
-  const finishLive = () => {
-    setTies((t) => ({ ...t, [live.key]: live.match }));
-    setLive(null);
-  };
+  // Auto-resolve every tie the user is NOT part of, cascading as winners feed
+  // forward. Returns the same state reference when nothing changed so the effect
+  // doesn't loop.
+  useEffect(() => {
+    if (live) return;
+    setTies((t) => {
+      let n = t, changed = true;
+      while (changed) {
+        changed = false;
+        const cand = [
+          ["q1", s1, s2],
+          ["elim", s3, s4],
+          ["q2", n.q1 ? L(n.q1) : null, n.elim?.winner ?? null],
+          ["final", n.q1?.winner ?? null, n.q2?.winner ?? null],
+        ];
+        for (const [key, a, b] of cand) {
+          if (!n[key] && a && b && a !== userTeamId && b !== userTeamId) {
+            n = { ...n, [key]: simMatch(a, b) };
+            changed = true;
+          }
+        }
+      }
+      return n;
+    });
+  }, [ties, live, s1, s2, s3, s4, userTeamId]);
+
+  const play = (key, label, aId, bId) => setLive({ key, label, match: simMatch(aId, bId) });
+  const finishLive = () => { setTies((t) => ({ ...t, [live.key]: live.match })); setLive(null); };
 
   if (live)
     return <OverByOver match={live.match} label={live.label} meta={meta} userTeamId={userTeamId} onDone={finishLive} />;
 
-  const loser  = (m) => (m.winner === m.firstId ? m.secondId : m.firstId);
   const q1 = ties.q1, elim = ties.elim, q2 = ties.q2, final = ties.final;
+  const champion = final?.winner;
 
-  const Tie = ({ label, aId, bId, m, onPlay, sub }) => (
+  // Once the user's run is over (won it all OR knocked out), show their finish.
+  // The effect keeps resolving the rest of the bracket so championId fills in.
+  const inTie = (m, id) => m && (m.firstId === id || m.secondId === id);
+  let finishPos = null;
+  if (champion === userTeamId) finishPos = 1;
+  else if (inTie(final, userTeamId)) finishPos = 2;
+  else if (inTie(q2, userTeamId) && L(q2) === userTeamId) finishPos = 3;
+  else if (inTie(elim, userTeamId) && L(elim) === userTeamId) finishPos = 4;
+  if (finishPos != null)
+    return <FinishScreen position={finishPos} userTeamId={userTeamId} championId={champion} onRestart={onRestart} />;
+
+  const mine = (a, b) => a === userTeamId || b === userTeamId;
+  const q2A = q1 ? L(q1) : null, q2B = elim?.winner ?? null;
+  const finalA = q1?.winner ?? null, finalB = q2?.winner ?? null;
+
+  const Tie = ({ label, aId, bId, m, mine: isMine, onPlay, sub }) => (
     <div className="tie">
       <div className="tie-label">{label}{sub && <span className="tie-sub"> · {sub}</span>}</div>
       {!aId || !bId ? (
         <div className="tie-pending">awaiting earlier results</div>
-      ) : !m ? (
+      ) : m ? (
+        <>
+          <ResultCard m={m} meta={meta} userTeamId={userTeamId} />
+          {!isMine && <div className="tie-auto">auto-simulated</div>}
+        </>
+      ) : isMine ? (
         <div className="tie-matchup">
           <span className="tie-side"><span className="rcard-badge" style={{ background: meta(aId).color, color: meta(aId).text }}>{meta(aId).short}</span></span>
           <span className="tie-v">vs</span>
@@ -1345,7 +1451,7 @@ function PlayoffsScreen({ teams, userTeamId, xis, seeds, teamObj, onRestart }) {
           <button className="bid-btn tie-play" onClick={onPlay}>Play live →</button>
         </div>
       ) : (
-        <ResultCard m={m} meta={meta} userTeamId={userTeamId} />
+        <div className="tie-pending">simulating…</div>
       )}
     </div>
   );
@@ -1354,31 +1460,22 @@ function PlayoffsScreen({ teams, userTeamId, xis, seeds, teamObj, onRestart }) {
     <div className="season">
       <div className="season-hd">
         <div>
-          <div className="pxi-title">{champion ? "Champions" : "Playoffs"}</div>
-          <div className="pxi-sub">{champion ? `${meta(champion).name} win the title!` : "Top 2 get two shots at the final. Win and advance."}</div>
+          <div className="pxi-title">Playoffs</div>
+          <div className="pxi-sub">You play your own knockouts live — every other tie auto-simulates.</div>
         </div>
         <button className="out-btn" onClick={onRestart}>New season ↻</button>
       </div>
 
-      {champion ? (
-        <div className="champion">
-          <div className="champ-badge" style={{ background: meta(champion).color, color: meta(champion).text }}>{meta(champion).short}</div>
-          <h1 className="champ-name">{meta(champion).name}</h1>
-          <div className="champ-sub">{champion === userTeamId ? "🏆 You built this squad from the auction floor. Champions." : "Better luck next season."}</div>
-          <button className="bid-btn" onClick={onRestart} style={{ marginTop: 18 }}>Run it back ↻</button>
-        </div>
-      ) : (
-        <div className="bracket">
-          <Tie label="Qualifier 1" sub={`${seeds[0]} (1) v ${seeds[1]} (2)`} aId={s1} bId={s2} m={q1} onPlay={() => play("q1", "Qualifier 1", s1, s2)} />
-          <Tie label="Eliminator" sub={`${seeds[2]} (3) v ${seeds[3]} (4)`} aId={s3} bId={s4} m={elim} onPlay={() => play("elim", "Eliminator", s3, s4)} />
-          <Tie label="Qualifier 2" sub="Q1 loser v Eliminator winner"
-            aId={q1 ? loser(q1) : null} bId={elim?.winner} m={q2}
-            onPlay={() => play("q2", "Qualifier 2", loser(q1), elim.winner)} />
-          <Tie label="Final" sub="Q1 winner v Q2 winner"
-            aId={q1?.winner} bId={q2?.winner} m={final}
-            onPlay={() => play("final", "The Final", q1.winner, q2.winner)} />
-        </div>
-      )}
+      <div className="bracket">
+        <Tie label="Qualifier 1" sub={`${seeds[0]} (1) v ${seeds[1]} (2)`} aId={s1} bId={s2} m={q1} mine={mine(s1, s2)} onPlay={() => play("q1", "Qualifier 1", s1, s2)} />
+        <Tie label="Eliminator" sub={`${seeds[2]} (3) v ${seeds[3]} (4)`} aId={s3} bId={s4} m={elim} mine={mine(s3, s4)} onPlay={() => play("elim", "Eliminator", s3, s4)} />
+        <Tie label="Qualifier 2" sub="Q1 loser v Eliminator winner"
+          aId={q2A} bId={q2B} m={q2} mine={mine(q2A, q2B)}
+          onPlay={() => play("q2", "Qualifier 2", q2A, q2B)} />
+        <Tie label="Final" sub="Q1 winner v Q2 winner"
+          aId={finalA} bId={finalB} m={final} mine={mine(finalA, finalB)}
+          onPlay={() => play("final", "The Final", finalA, finalB)} />
+      </div>
     </div>
   );
 }
@@ -1422,7 +1519,7 @@ function Summary({ me, teams, onRestart }) {
       <h1 className="sum-title">Your squad is set</h1>
       <div className="sum-stats">
         <div><b>{me.squad.length}</b> players won</div>
-        <div><b style={{ color: "#F5C451" }}>{cr(spent)}</b> spent</div>
+        <div><b style={{ color: "#B5800F" }}>{cr(spent)}</b> spent</div>
         <div><b>{cr(me.purse)}</b> purse left</div>
       </div>
       <div className="squad-chips-row" style={{ marginTop: 14 }}>
@@ -1450,6 +1547,24 @@ function PickXIScreen({ squad, onLock, teams = [], userTeamId }) {
   const [lineup, setLineup]   = useState([]);
   const [selSet, setSelSet]   = useState(new Set());
   const [viewTeam, setViewTeam] = useState(null); // teamId for rival squad modal
+  const [dropActive, setDropActive] = useState(false); // drag-over highlight on the XI panel
+
+  // Auto-pick the best legal XI (same engine the AI teams use), ordered for batting.
+  const autoPick = () => {
+    const xi = battingOrder(pickXI(squad));
+    setLineup(xi);
+    setSelSet(new Set(xi.map((p) => p.name)));
+  };
+  const clearXI = () => { setLineup([]); setSelSet(new Set()); };
+
+  // Drop a dragged squad card into the XI (same effect as tapping it to add).
+  const onDropPlayer = (e) => {
+    e.preventDefault();
+    setDropActive(false);
+    const name = e.dataTransfer.getData("text/plain");
+    const player = squad.find((s) => s.name === name);
+    if (player && !selSet.has(player.name) && selSet.size < 11) toggle(player);
+  };
 
   const toggle = (player) => {
     if (selSet.has(player.name)) {
@@ -1491,14 +1606,14 @@ function PickXIScreen({ squad, onLock, teams = [], userTeamId }) {
   };
 
   const SECTIONS = [
-    { id: "wk",       label: "Wicketkeeper",           rec: "need 1",   color: "#FFB74D" },
-    { id: "opener",   label: "Openers / Top Order",    rec: "pick 2–3", color: "#4FC3F7" },
-    { id: "middle",   label: "Middle Order",           rec: "pick 1–2", color: "#4FC3F7" },
-    { id: "finisher", label: "Finishers",              rec: "pick 1–2", color: "#a78bfa" },
-    { id: "allround", label: "All-rounders",           rec: "pick 2–3", color: "#81C784" },
-    { id: "pace",     label: "Pace Bowlers",           rec: "pick 2–3", color: "#E57373" },
-    { id: "spin",     label: "Spin Bowlers",           rec: "pick 1–2", color: "#fb923c" },
-    { id: "lower",    label: "Lower Order",            rec: "",         color: "#8A93A8" },
+    { id: "wk",       label: "Wicketkeeper",           rec: "need 1",   color: "#C8851A" },
+    { id: "opener",   label: "Openers / Top Order",    rec: "pick 2–3", color: "#2E86C8" },
+    { id: "middle",   label: "Middle Order",           rec: "pick 1–2", color: "#2E86C8" },
+    { id: "finisher", label: "Finishers",              rec: "pick 1–2", color: "#7E5BE0" },
+    { id: "allround", label: "All-rounders",           rec: "pick 2–3", color: "#3E9E54" },
+    { id: "pace",     label: "Pace Bowlers",           rec: "pick 2–3", color: "#D04A4A" },
+    { id: "spin",     label: "Spin Bowlers",           rec: "pick 1–2", color: "#D9701A" },
+    { id: "lower",    label: "Lower Order",            rec: "",         color: "#677087" },
   ];
 
   // Group squad into sections (only show sections that have players)
@@ -1531,14 +1646,18 @@ function PickXIScreen({ squad, onLock, teams = [], userTeamId }) {
         <div>
           <div className="pxi-title">Pick Your XI</div>
           <div className="pxi-sub">
-            {squad.length} players · {selSet.size}/11 selected · tap a player to add to batting order
+            {squad.length} players · {selSet.size}/11 selected · drag or tap a player to build your XI — or auto-pick
           </div>
         </div>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
           {warnings.length > 0 && <div className="pxi-warn">{warnings[0]}</div>}
-          <button className="bid-btn pxi-lock" onClick={() => onLock(lineup)} disabled={!canLock}>
-            {lineup.length < 11 ? `${lineup.length} / 11 selected` : blockers.length ? "Fix your XI" : "Lock XI →"}
-          </button>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <button className="auto-btn" onClick={autoPick}>✨ Auto-pick best XI</button>
+            {lineup.length > 0 && <button className="out-btn pxi-clear" onClick={clearXI}>Clear</button>}
+            <button className="bid-btn pxi-lock" onClick={() => onLock(lineup)} disabled={!canLock}>
+              {lineup.length < 11 ? `${lineup.length} / 11 selected` : blockers.length ? "Fix your XI" : "Lock XI →"}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1572,7 +1691,9 @@ function PickXIScreen({ squad, onLock, teams = [], userTeamId }) {
                           <div
                             key={p.name}
                             className={`psc${isSel ? " psc-sel" : ""}`}
-                            style={isSel ? { borderColor: sec.color, boxShadow: `0 0 0 1px ${sec.color}55` } : { borderColor: "rgba(255,255,255,.08)" }}
+                            style={isSel ? { borderColor: sec.color, boxShadow: `0 0 0 1px ${sec.color}55` } : { borderColor: "rgba(20,30,50,.1)" }}
+                            draggable
+                            onDragStart={(e) => e.dataTransfer.setData("text/plain", p.name)}
                             onClick={() => toggle(p)}
                           >
                             {isSel && (
@@ -1581,8 +1702,8 @@ function PickXIScreen({ squad, onLock, teams = [], userTeamId }) {
                             <div className="psc-name">{p.name}</div>
                             <div className="psc-chips">
                               {p.overseas && <span className="psc-os">OS</span>}
-                              {p.finisher && <span className="psc-tag" style={{ color: "#a78bfa" }}>FIN</span>}
-                              {p.deathSpec && <span className="psc-tag" style={{ color: "#E57373" }}>DEATH</span>}
+                              {p.finisher && <span className="psc-tag" style={{ color: "#7E5BE0" }}>FIN</span>}
+                              {p.deathSpec && <span className="psc-tag" style={{ color: "#D04A4A" }}>DEATH</span>}
                             </div>
                             <div className="psc-foot">
                               <span className="psc-price">{cr(p.price)}</span>
@@ -1599,17 +1720,22 @@ function PickXIScreen({ squad, onLock, teams = [], userTeamId }) {
           )}
         </div>
 
-        {/* RIGHT — batting order */}
-        <div className="pxi-lineup">
-          <div className="pxi-lineup-title">BATTING ORDER</div>
+        {/* RIGHT — batting order (drop target for dragged cards) */}
+        <div
+          className={`pxi-lineup${dropActive ? " pxi-lineup-drop" : ""}`}
+          onDragOver={(e) => { e.preventDefault(); if (!dropActive) setDropActive(true); }}
+          onDragLeave={() => setDropActive(false)}
+          onDrop={onDropPlayer}
+        >
+          <div className="pxi-lineup-title">BATTING ORDER {dropActive && <span className="drop-hint">drop to add ▾</span>}</div>
 
           {/* Role balance bars */}
           <div className="role-bars">
             {[
-              ["Batters",      roleCounts.Batter        || 0, 5, "#4FC3F7"],
-              ["All-rounders", roleCounts["All-rounder"] || 0, 3, "#81C784"],
-              ["WK",           roleCounts.WK             || 0, 2, "#FFB74D"],
-              ["Bowlers",      roleCounts.Bowler         || 0, 5, "#E57373"],
+              ["Batters",      roleCounts.Batter        || 0, 5, "#2E86C8"],
+              ["All-rounders", roleCounts["All-rounder"] || 0, 3, "#3E9E54"],
+              ["WK",           roleCounts.WK             || 0, 2, "#C8851A"],
+              ["Bowlers",      roleCounts.Bowler         || 0, 5, "#D04A4A"],
             ].map(([lbl, val, max, col]) => (
               <div key={lbl} className="rb-row">
                 <span className="rb-lbl">{lbl}</span>
@@ -1641,7 +1767,7 @@ function PickXIScreen({ squad, onLock, teams = [], userTeamId }) {
             {Array.from({ length: Math.max(0, 11 - lineup.length) }).map((_, i) => (
               <div key={`slot-${i}`} className="lineup-row lineup-slot">
                 <span className="lineup-num lineup-num-empty">{lineup.length + i + 1}</span>
-                <span className="lineup-slot-hint">pick a player from your squad</span>
+                <span className="lineup-slot-hint">drag or tap a player here</span>
               </div>
             ))}
           </div>
@@ -1688,7 +1814,7 @@ function PickXIScreen({ squad, onLock, teams = [], userTeamId }) {
                 <span className="tc-badge" style={{ background: td.color, color: td.text, fontSize: 13 }}>{td.short}</span>
                 <div>
                   <div style={{ fontWeight: 700, fontSize: 15 }}>{td.name}</div>
-                  <div style={{ fontSize: 12, color: "#8A93A8" }}>{sq.length} players · {cr(ts.purse)} left</div>
+                  <div style={{ fontSize: 12, color: "#677087" }}>{sq.length} players · {cr(ts.purse)} left</div>
                 </div>
                 <button className="modal-close" onClick={() => setViewTeam(null)}>✕</button>
               </div>
@@ -1699,7 +1825,7 @@ function PickXIScreen({ squad, onLock, teams = [], userTeamId }) {
                       <div key={i} className="modal-row">
                         <span className="modal-role" style={{ color: roleColor(s.role) }}>{roleShort(s.role)}</span>
                         <span className="modal-name">{s.name}</span>
-                        <span className="modal-country" style={{ color: s.overseas ? "#F5C451" : "#6B7488" }}>{s.country}{s.overseas ? " ✈" : ""}</span>
+                        <span className="modal-country" style={{ color: s.overseas ? "#B5800F" : "#6B7488" }}>{s.country}{s.overseas ? " ✈" : ""}</span>
                         <span className="modal-price">{cr(s.price)}</span>
                       </div>
                     ))}
@@ -1719,11 +1845,11 @@ const styles = `
   position: relative;
   --display-font: 'Barlow Condensed', 'Arial Narrow', ui-sans-serif, sans-serif;
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-  color: #EAEEF7;
+  color: #1B2436;
   background:
-    radial-gradient(900px 400px at 30% 0%, rgba(245,196,81,.08), transparent 55%),
-    radial-gradient(600px 500px at 100% 0%, rgba(27,111,203,.13), transparent 50%),
-    linear-gradient(180deg, #0B1120, #070A14 70%);
+    radial-gradient(900px 400px at 30% 0%, rgba(245,196,81,.12), transparent 55%),
+    radial-gradient(600px 500px at 100% 0%, rgba(27,111,203,.07), transparent 50%),
+    linear-gradient(180deg, #EDF0F6, #DEE4EF 70%);
   border-radius: 16px;
   padding: 16px 18px 20px;
   font-variant-numeric: tabular-nums;
@@ -1737,7 +1863,7 @@ const styles = `
   display: flex; justify-content: space-between; align-items: center;
   gap: 12px; flex-wrap: wrap;
   padding-bottom: 13px; margin-bottom: 14px;
-  border-bottom: 1px solid rgba(255,255,255,.07);
+  border-bottom: 1px solid rgba(20,30,50,.07);
 }
 .hd-brand  { display: flex; align-items: center; gap: 10px; }
 .hd-icon   {
@@ -1748,19 +1874,19 @@ const styles = `
 }
 .hd-icon.big { width: 50px; height: 50px; border-radius: 13px; margin: 0 auto 10px; }
 .hd-title  { font-weight: 800; letter-spacing: .16em; font-size: 13px; }
-.hd-sub    { font-size: 11px; color: #8A93A8; }
+.hd-sub    { font-size: 11px; color: #677087; }
 .hd-stats  { display: flex; gap: 8px; }
 .hd-stat   {
-  background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.07);
+  background: rgba(20,30,50,.04); border: 1px solid rgba(20,30,50,.07);
   border-radius: 10px; padding: 6px 12px;
 }
 .hd-stat-gold {
   background: linear-gradient(150deg, rgba(245,196,81,.14), rgba(245,196,81,.04));
   border-color: rgba(245,196,81,.3);
 }
-.hd-stat-lbl { font-size: 9.5px; color: #8A93A8; letter-spacing: .1em; text-transform: uppercase; }
+.hd-stat-lbl { font-size: 9.5px; color: #677087; letter-spacing: .1em; text-transform: uppercase; }
 .hd-stat-val { font-weight: 800; font-size: 15px; margin-top: 1px; }
-.hd-stat-gold .hd-stat-val { color: #F5C451; }
+.hd-stat-gold .hd-stat-val { color: #B5800F; }
 
 /* body grid — matches the sketch exactly */
 .body {
@@ -1773,18 +1899,19 @@ const styles = `
 
 /* ── LEFT: squad panel ── */
 .squad-panel {
-  background: rgba(255,255,255,.03);
-  border: 1px solid rgba(255,255,255,.07);
+  background: #FFFFFF;
+  border: 1px solid rgba(20,30,50,.1);
   border-radius: 13px;
   padding: 13px 13px;
   min-height: 400px;
+  box-shadow: 0 2px 10px -4px rgba(20,30,50,.12);
 }
 .panel-title {
   font-size: 10px; font-weight: 700; letter-spacing: .14em;
-  color: #8A93A8; text-transform: uppercase; margin-bottom: 11px;
+  color: #677087; text-transform: uppercase; margin-bottom: 11px;
   display: flex; justify-content: space-between;
 }
-.panel-title span { color: #F5C451; }
+.panel-title span { color: #B5800F; }
 .squad-list { display: flex; flex-direction: column; gap: 8px; }
 .squad-item {
   background: rgba(27,111,203,.12); border: 1px solid rgba(27,111,203,.3);
@@ -1792,8 +1919,8 @@ const styles = `
 }
 .squad-item-name { font-size: 12.5px; font-weight: 700; }
 .squad-item-meta { display: flex; justify-content: space-between; margin-top: 3px; }
-.squad-role  { font-size: 10.5px; color: #8A93A8; }
-.squad-price { font-size: 11px; font-weight: 700; color: #F5C451; }
+.squad-role  { font-size: 10.5px; color: #677087; }
+.squad-price { font-size: 11px; font-weight: 700; color: #B5800F; }
 .empty-hint  { font-size: 12px; color: #6B7488; line-height: 1.5; margin: 0; }
 
 /* ── CENTER ── */
@@ -1802,12 +1929,12 @@ const styles = `
 /* player stage */
 .stage {
   position: relative;
-  background: linear-gradient(160deg, rgba(255,255,255,.055), rgba(255,255,255,.02));
-  border: 1px solid rgba(255,255,255,.1);
+  background: #FFFFFF;
+  border: 1px solid rgba(20,30,50,.1);
   border-radius: 15px;
   padding: 18px 20px;
   overflow: hidden;
-  box-shadow: 0 0 50px -20px rgba(245,196,81,.12);
+  box-shadow: 0 18px 44px -20px rgba(20,30,50,.3), 0 0 60px -22px rgba(245,196,81,.22);
 }
 .stage::before {
   content: ""; position: absolute; inset: 0; pointer-events: none;
@@ -1815,10 +1942,10 @@ const styles = `
 }
 .stage-eyebrow {
   display: flex; align-items: center; gap: 10px;
-  font-size: 10.5px; letter-spacing: .16em; color: #8A93A8; font-weight: 700;
+  font-size: 10.5px; letter-spacing: .16em; color: #677087; font-weight: 700;
 }
 .tier-pill {
-  color: #F5C451; border: 1px solid rgba(245,196,81,.4);
+  color: #B5800F; border: 1px solid rgba(245,196,81,.4);
   padding: 2px 8px; border-radius: 99px; background: rgba(245,196,81,.08);
   font-size: 10px;
 }
@@ -1830,9 +1957,9 @@ const styles = `
 }
 .stage-chips { display: flex; gap: 7px; margin-top: 9px; flex-wrap: wrap; }
 .chip {
-  font-size: 11.5px; background: rgba(255,255,255,.06);
-  border: 1px solid rgba(255,255,255,.08); padding: 3px 10px;
-  border-radius: 99px; color: #C7CEDD;
+  font-size: 11.5px; background: rgba(20,30,50,.06);
+  border: 1px solid rgba(20,30,50,.08); padding: 3px 10px;
+  border-radius: 99px; color: #46526B;
 }
 .stage-main {
   display: flex; align-items: center; justify-content: space-between; gap: 18px;
@@ -1847,10 +1974,10 @@ const styles = `
 .ring-init  { font-weight: 850; font-size: 19px; }
 .ring-secs  { font-size: 10.5px; font-weight: 700; margin-top: 1px; }
 .bid-block  { flex: 0 1 auto; min-width: 130px; }
-.bid-lbl    { font-size: 10px; letter-spacing: .15em; color: #8A93A8; font-weight: 700; }
-.bid-num    { font-family: var(--display-font); font-size: clamp(30px, 4.4vw, 50px); font-weight: 800; letter-spacing: .01em; color: #F5C451; line-height: 1.05; }
+.bid-lbl    { font-size: 10px; letter-spacing: .15em; color: #677087; font-weight: 700; }
+.bid-num    { font-family: var(--display-font); font-size: clamp(30px, 4.4vw, 50px); font-weight: 800; letter-spacing: .01em; color: #B5800F; line-height: 1.05; }
 .bid-leader { margin-top: 5px; font-size: 12.5px; font-weight: 700; }
-.lead-you   { color: #3DDC97; }
+.lead-you   { color: #12A06A; }
 .lead-none  { color: #6B7488; font-weight: 500; }
 .bid-base   { margin-top: 6px; font-size: 10.5px; color: #6B7488; }
 /* user bidding pod (right of stage) */
@@ -1864,38 +1991,38 @@ const styles = `
 .user-pod-badge {
   width: 38px; height: 38px; border-radius: 9px; flex: none;
   display: grid; place-items: center; font-weight: 850; font-size: 13px;
-  background: #1B6FCB; color: #fff; box-shadow: 0 3px 10px -3px rgba(27,111,203,.7);
+  background: #1B6FCB; color: #FFFFFF; box-shadow: 0 3px 10px -3px rgba(27,111,203,.7);
 }
-.user-pod-name  { font-size: 14px; font-weight: 800; color: #EAEEF7; line-height: 1.1; }
-.user-pod-purse { font-size: 11px; font-weight: 600; color: #7FB0E6; margin-top: 2px; }
+.user-pod-name  { font-size: 14px; font-weight: 800; color: #1B2436; line-height: 1.1; }
+.user-pod-purse { font-size: 11px; font-weight: 600; color: #2E6FB0; margin-top: 2px; }
 .controls   { display: flex; flex-direction: column; gap: 7px; }
 .controls .bid-btn { justify-content: center; width: 100%; }
 .controls .out-btn { width: 100%; text-align: center; }
 
 /* autopilot */
-.ap-wrap { margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,.07); }
+.ap-wrap { margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(20,30,50,.07); }
 .ap-btn {
-  width: 100%; background: rgba(255,255,255,.05);
-  border: 1px solid rgba(255,255,255,.12); color: #AEB6C7;
+  width: 100%; background: rgba(20,30,50,.05);
+  border: 1px solid rgba(20,30,50,.12); color: #55617A;
   font-size: 11.5px; font-weight: 700; padding: 8px 12px; border-radius: 9px;
   cursor: pointer; letter-spacing: .01em; transition: background .15s, border-color .15s;
 }
-.ap-btn:hover { background: rgba(255,255,255,.09); border-color: rgba(255,255,255,.22); color: #EAEEF7; }
+.ap-btn:hover { background: rgba(20,30,50,.09); border-color: rgba(20,30,50,.22); color: #1B2436; }
 .ap-confirm { display: flex; flex-direction: column; gap: 8px; }
-.ap-confirm-txt { font-size: 11px; color: #AEB6C7; text-align: center; line-height: 1.4; }
+.ap-confirm-txt { font-size: 11px; color: #55617A; text-align: center; line-height: 1.4; }
 .ap-confirm-btns { display: flex; gap: 7px; }
 .ap-yes {
-  flex: 1; background: linear-gradient(150deg,#4FC3F7,#1e90c7); border: none;
+  flex: 1; background: linear-gradient(150deg,#2E86C8,#1e90c7); border: none;
   color: #0B1120; font-weight: 800; font-size: 12px; padding: 8px; border-radius: 8px;
   cursor: pointer; transition: filter .15s;
 }
 .ap-yes:hover { filter: brightness(1.1); }
 .ap-no {
-  flex: 1; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12);
-  color: #AEB6C7; font-size: 12px; font-weight: 600; padding: 8px; border-radius: 8px;
+  flex: 1; background: rgba(20,30,50,.06); border: 1px solid rgba(20,30,50,.12);
+  color: #55617A; font-size: 12px; font-weight: 600; padding: 8px; border-radius: 8px;
   cursor: pointer;
 }
-.ap-no:hover { background: rgba(255,255,255,.1); }
+.ap-no:hover { background: rgba(20,30,50,.1); }
 .bid-btn {
   border: none; cursor: pointer;
   background: linear-gradient(155deg,#F5C451,#D89B22); color: #1a1304;
@@ -1907,38 +2034,38 @@ const styles = `
 }
 .bid-btn:hover:not(:disabled) { filter: brightness(1.07); }
 .bid-btn:active:not(:disabled) { transform: scale(.98); }
-.bid-btn:disabled { background: rgba(255,255,255,.06); color: #6B7488; box-shadow: none; cursor: not-allowed; }
+.bid-btn:disabled { background: rgba(20,30,50,.06); color: #6B7488; box-shadow: none; cursor: not-allowed; }
 .out-btn {
-  border: 1px solid rgba(255,255,255,.15); background: transparent;
-  color: #C7CEDD; cursor: pointer; font-size: 12.5px; font-weight: 600;
+  border: 1px solid rgba(20,30,50,.15); background: transparent;
+  color: #46526B; cursor: pointer; font-size: 12.5px; font-weight: 600;
   padding: 9px 16px; border-radius: 9px; transition: background .15s;
   min-height: 44px;
 }
-.out-btn:hover { background: rgba(255,255,255,.06); }
-.passed-tag  { font-size: 12px; color: #8A93A8; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.09); padding: 9px 14px; border-radius: 9px; text-align: center; }
-.leading-tag { font-size: 13px; font-weight: 700; color: #3DDC97; text-align: center; padding: 9px 0; }
+.out-btn:hover { background: rgba(20,30,50,.06); }
+.passed-tag  { font-size: 12px; color: #677087; background: rgba(20,30,50,.05); border: 1px solid rgba(20,30,50,.09); padding: 9px 14px; border-radius: 9px; text-align: center; }
+.leading-tag { font-size: 13px; font-weight: 700; color: #12A06A; text-align: center; padding: 9px 0; }
 
 /* stamp overlay */
 .overlay {
   position: absolute; inset: 0; z-index: 10;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
-  background: rgba(7,10,20,.78); backdrop-filter: blur(3px); border-radius: 14px;
+  background: rgba(247,249,252,.86); backdrop-filter: blur(3px); border-radius: 14px;
 }
 .stamp {
   display: flex; align-items: center; gap: 9px;
   font-size: 30px; font-weight: 850; letter-spacing: .04em;
   padding: 9px 24px; border-radius: 12px; border: 3px solid;
 }
-.stamp-sold   { color: #F5C451; border-color: #F5C451; }
-.stamp-you    { color: #3DDC97; border-color: #3DDC97; }
-.stamp-unsold { color: #FF5A5F; border-color: #FF5A5F; font-size: 22px; }
-.stamp-sub    { font-size: 13px; font-weight: 700; color: #C7CEDD; letter-spacing: .04em; }
+.stamp-sold   { color: #B5800F; border-color: #B5800F; }
+.stamp-you    { color: #12A06A; border-color: #12A06A; }
+.stamp-unsold { color: #DC3A40; border-color: #DC3A40; font-size: 22px; }
+.stamp-sub    { font-size: 13px; font-weight: 700; color: #46526B; letter-spacing: .04em; }
 
 /* other teams section */
 .teams-section {}
 .section-label {
   font-size: 10px; font-weight: 700; letter-spacing: .14em;
-  color: #8A93A8; text-transform: uppercase; margin-bottom: 9px;
+  color: #677087; text-transform: uppercase; margin-bottom: 9px;
 }
 .teams-grid {
   display: grid;
@@ -1949,11 +2076,13 @@ const styles = `
 /* team card */
 .tc-wrap { position: relative; padding-top: 34px; }
 .tc {
-  background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08);
+  background: #FFFFFF; border: 1px solid rgba(20,30,50,.1);
   border-radius: 12px; padding: 12px 14px;
+  box-shadow: 0 1px 6px -3px rgba(20,30,50,.12);
   transition: box-shadow .2s, border-color .2s, background .2s;
 }
-.tc-lead { background: rgba(255,255,255,.07); }
+.tc:hover { box-shadow: 0 4px 14px -5px rgba(20,30,50,.2); }
+.tc-lead { background: #FFFFFF; }
 .tc-head  { display: flex; align-items: center; gap: 11px; }
 .tc-badge {
   width: 40px; height: 40px; border-radius: 9px;
@@ -1962,12 +2091,12 @@ const styles = `
 }
 .tc-info  { min-width: 0; flex: 1; }
 .tc-name  {
-  font-size: 12.5px; font-weight: 700; color: #EAEEF7;
+  font-size: 12.5px; font-weight: 700; color: #1B2436;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .tc-sub   { display: flex; align-items: baseline; gap: 7px; margin-top: 3px; min-width: 0; }
 .tc-purse { font-weight: 800; font-size: 13px; flex: none; }
-.tc-bought { font-size: 10px; color: #8A93A8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tc-bought { font-size: 10px; color: #677087; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tc-bought em { font-style: normal; font-weight: 700; }
 
 /* bid toast */
@@ -1975,7 +2104,7 @@ const styles = `
   position: absolute; top: 0; left: 50%; transform: translateX(-50%);
   font-size: 14px; font-weight: 850; padding: 5px 12px; border-radius: 8px;
   white-space: nowrap; z-index: 5; letter-spacing: .01em; line-height: 1;
-  box-shadow: 0 6px 16px rgba(0,0,0,.45), 0 0 0 2px rgba(255,255,255,.14);
+  box-shadow: 0 6px 16px rgba(0,0,0,.45), 0 0 0 2px rgba(20,30,50,.14);
   animation: toastIn .25s cubic-bezier(.2,1.4,.4,1), toastPulse 1.1s ease-in-out .25s infinite;
 }
 .tc-toast::after {
@@ -1987,55 +2116,57 @@ const styles = `
 /* ── RIGHT: panels ── */
 .right-col { display: flex; flex-direction: column; gap: 12px; }
 .panel {
-  background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.07);
+  background: #FFFFFF; border: 1px solid rgba(20,30,50,.1);
   border-radius: 13px; padding: 13px 13px;
+  box-shadow: 0 2px 10px -4px rgba(20,30,50,.12);
 }
 .ticker {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 11px; display: flex; flex-direction: column; gap: 6px;
   max-height: 180px; overflow-y: auto;
 }
-.tick     { display: flex; align-items: flex-start; gap: 7px; color: #AEB6C7; line-height: 1.4; }
-.tick-new { color: #fff; }
+.tick     { display: flex; align-items: flex-start; gap: 7px; color: #55617A; line-height: 1.4; }
+.tick-new { color: #0E1626; }
 .tick-dot { width: 6px; height: 6px; border-radius: 99px; flex: none; margin-top: 4px; }
 .sold-list { display: flex; flex-direction: column; gap: 5px; max-height: 200px; overflow-y: auto; }
 .sold-row  { display: flex; align-items: center; gap: 6px; font-size: 11.5px; }
-.sold-name  { flex: 1; font-weight: 600; color: #EAEEF7; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sold-name  { flex: 1; font-weight: 600; color: #1B2436; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sold-team  { font-weight: 800; font-size: 10.5px; flex-shrink: 0; }
-.sold-price { font-weight: 700; color: #F5C451; font-size: 10.5px; flex-shrink: 0; }
+.sold-price { font-weight: 700; color: #B5800F; font-size: 10.5px; flex-shrink: 0; }
 
 /* summary */
 .summary { padding: 24px 4px; }
-.sum-eye   { font-size: 10.5px; letter-spacing: .18em; color: #8A93A8; font-weight: 700; }
+.sum-eye   { font-size: 10.5px; letter-spacing: .18em; color: #677087; font-weight: 700; }
 .sum-title { font-family: var(--display-font); text-transform: uppercase; font-size: 40px; font-weight: 800; margin: 6px 0 0; letter-spacing: .01em; }
-.sum-stats { display: flex; gap: 24px; margin-top: 14px; flex-wrap: wrap; font-size: 13px; color: #AEB6C7; }
-.sum-stats b { font-size: 22px; font-weight: 850; color: #fff; display: block; margin-bottom: 2px; }
+.sum-stats { display: flex; gap: 24px; margin-top: 14px; flex-wrap: wrap; font-size: 13px; color: #55617A; }
+.sum-stats b { font-size: 22px; font-weight: 850; color: #0E1626; display: block; margin-bottom: 2px; }
 .squad-chips-row { display: flex; gap: 7px; flex-wrap: wrap; }
 .squad-chip {
   font-size: 12px; background: rgba(27,111,203,.14); border: 1px solid rgba(27,111,203,.32);
-  color: #dfe7f5; padding: 5px 10px; border-radius: 8px;
+  color: #2A3850; padding: 5px 10px; border-radius: 8px;
 }
-.squad-chip b { color: #F5C451; font-weight: 700; margin-left: 3px; }
+.squad-chip b { color: #B5800F; font-weight: 700; margin-left: 3px; }
 .sum-rivals {
   display: flex; gap: 12px; flex-wrap: wrap; margin-top: 14px; padding-top: 12px;
-  border-top: 1px solid rgba(255,255,255,.07); font-size: 12.5px; color: #AEB6C7;
+  border-top: 1px solid rgba(20,30,50,.07); font-size: 12.5px; color: #55617A;
 }
 
 /* start overlay */
 .start-overlay {
   position: absolute; inset: 0; z-index: 20;
   display: grid; place-items: center;
-  background: radial-gradient(600px 400px at 50% 30%, rgba(27,111,203,.16), transparent 60%), rgba(7,10,20,.93);
+  background: radial-gradient(600px 400px at 50% 30%, rgba(27,111,203,.12), transparent 60%), rgba(244,247,251,.96);
   border-radius: 16px; padding: 20px;
 }
 .start-card {
   max-width: 380px; text-align: center;
-  background: linear-gradient(160deg, rgba(255,255,255,.07), rgba(255,255,255,.02));
-  border: 1px solid rgba(255,255,255,.1); border-radius: 18px; padding: 28px 26px;
+  background: #FFFFFF;
+  border: 1px solid rgba(20,30,50,.12); border-radius: 18px; padding: 28px 26px;
+  box-shadow: 0 24px 60px -24px rgba(20,30,50,.3);
 }
 .start-card-wide { max-width: 480px; }
 .start-card h2 { font-size: 26px; font-weight: 850; margin: 0 0 10px; letter-spacing: -.01em; }
-.start-card p  { font-size: 13.5px; line-height: 1.6; color: #AEB6C7; margin: 0 0 20px; }
+.start-card p  { font-size: 13.5px; line-height: 1.6; color: #55617A; margin: 0 0 20px; }
 .start-note    { display: block; margin-top: 13px; font-size: 10.5px; color: #6B7488; }
 
 /* team picker grid */
@@ -2044,7 +2175,7 @@ const styles = `
   margin-bottom: 14px;
 }
 .tp-btn {
-  background: rgba(255,255,255,.04);
+  background: rgba(20,30,50,.04);
   border: 1.5px solid; border-radius: 10px;
   padding: 10px 4px; cursor: pointer;
   font-weight: 800; font-size: 11px; letter-spacing: .06em;
@@ -2076,13 +2207,13 @@ const styles = `
 .pxi-hd {
   display: flex; justify-content: space-between; align-items: flex-start; gap: 16px;
   padding-bottom: 16px; margin-bottom: 16px;
-  border-bottom: 1px solid rgba(255,255,255,.07);
+  border-bottom: 1px solid rgba(20,30,50,.07);
 }
 .pxi-title { font-family: var(--display-font); text-transform: uppercase; font-size: 32px; font-weight: 800; letter-spacing: .01em; }
-.pxi-sub   { font-size: 12.5px; color: #8A93A8; margin-top: 5px; }
-.pxi-warn  { font-size: 11px; color: #FF5A5F; font-weight: 700; letter-spacing: .02em; text-align: right; }
+.pxi-sub   { font-size: 12.5px; color: #677087; margin-top: 5px; }
+.pxi-warn  { font-size: 11px; color: #DC3A40; font-weight: 700; letter-spacing: .02em; text-align: right; }
 .pxi-lock  { font-size: 15px; padding: 11px 22px; }
-.pxi-lock:disabled { background: rgba(255,255,255,.06); color: #6B7488; box-shadow: none; cursor: not-allowed; }
+.pxi-lock:disabled { background: rgba(20,30,50,.06); color: #6B7488; box-shadow: none; cursor: not-allowed; }
 
 .pxi-body  { display: grid; grid-template-columns: 1fr 280px; gap: 16px; align-items: start; }
 @media (max-width: 860px) { .pxi-body { grid-template-columns: 1fr; } }
@@ -2106,40 +2237,41 @@ const styles = `
 }
 .pxi-sec-row::-webkit-scrollbar { height: 3px; }
 .pxi-sec-row::-webkit-scrollbar-track { background: transparent; }
-.pxi-sec-row::-webkit-scrollbar-thumb { background: rgba(255,255,255,.12); border-radius: 99px; }
+.pxi-sec-row::-webkit-scrollbar-thumb { background: rgba(20,30,50,.12); border-radius: 99px; }
 
 /* section player card */
 .psc {
   position: relative; flex: none; width: 130px;
-  background: rgba(255,255,255,.04); border: 1px solid;
+  background: #FFFFFF; border: 1px solid;
   border-radius: 10px; padding: 10px 10px 8px;
-  cursor: pointer; transition: background .13s, border-color .13s, box-shadow .13s;
+  cursor: grab; transition: background .13s, border-color .13s, box-shadow .13s;
+  box-shadow: 0 1px 5px -3px rgba(20,30,50,.12);
 }
-.psc:hover { background: rgba(255,255,255,.08); }
-.psc-sel   { background: rgba(255,255,255,.07); }
+.psc:hover { box-shadow: 0 4px 12px -5px rgba(20,30,50,.2); }
+.psc-sel   { background: rgba(20,30,50,.07); }
 .psc-pos   {
   position: absolute; top: -8px; right: -8px;
   font-size: 9px; font-weight: 850; padding: 2px 6px;
   border-radius: 99px; letter-spacing: .03em;
 }
-.psc-name  { font-size: 12px; font-weight: 700; color: #EAEEF7; margin-bottom: 5px; line-height: 1.2;
+.psc-name  { font-size: 12px; font-weight: 700; color: #1B2436; margin-bottom: 5px; line-height: 1.2;
              white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .psc-chips { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 6px; min-height: 16px; }
-.psc-os    { font-size: 9px; font-weight: 700; color: #8A93A8; background: rgba(255,255,255,.08); padding: 1px 5px; border-radius: 4px; }
+.psc-os    { font-size: 9px; font-weight: 700; color: #677087; background: rgba(20,30,50,.08); padding: 1px 5px; border-radius: 4px; }
 .psc-tag   { font-size: 9px; font-weight: 800; letter-spacing: .04em; }
 .psc-foot  { display: flex; justify-content: space-between; align-items: baseline; }
-.psc-price { font-size: 11px; font-weight: 700; color: #F5C451; }
+.psc-price { font-size: 11px; font-weight: 700; color: #B5800F; }
 .psc-rating{ font-size: 10px; color: #6B7488; }
 
 .pxi-filters { display: flex; align-items: center; gap: 7px; margin-bottom: 14px; flex-wrap: wrap; }
 .pf-btn {
-  border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.04);
-  color: #AEB6C7; font-size: 11px; font-weight: 700; letter-spacing: .08em;
+  border: 1px solid rgba(20,30,50,.12); background: rgba(20,30,50,.04);
+  color: #55617A; font-size: 11px; font-weight: 700; letter-spacing: .08em;
   padding: 5px 12px; border-radius: 7px; cursor: pointer; transition: all .15s;
 }
-.pf-btn:hover  { background: rgba(255,255,255,.08); }
-.pf-active     { background: rgba(245,196,81,.14) !important; border-color: rgba(245,196,81,.5) !important; color: #F5C451 !important; }
-.pf-count      { font-size: 11px; color: #8A93A8; margin-left: auto; }
+.pf-btn:hover  { background: rgba(20,30,50,.08); }
+.pf-active     { background: rgba(245,196,81,.14) !important; border-color: rgba(245,196,81,.5) !important; color: #B5800F !important; }
+.pf-count      { font-size: 11px; color: #677087; margin-left: auto; }
 
 .ppool-grid {
   display: grid;
@@ -2147,64 +2279,65 @@ const styles = `
   gap: 10px;
 }
 .pcard {
-  position: relative; background: rgba(255,255,255,.04);
-  border: 1px solid rgba(255,255,255,.08); border-radius: 12px;
+  position: relative; background: rgba(20,30,50,.04);
+  border: 1px solid rgba(20,30,50,.08); border-radius: 12px;
   padding: 12px; cursor: pointer;
   transition: border-color .15s, box-shadow .15s, background .15s;
 }
-.pcard:hover { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.16); }
-.pcard-sel   { background: rgba(255,255,255,.07); }
+.pcard:hover { background: rgba(20,30,50,.07); border-color: rgba(20,30,50,.16); }
+.pcard-sel   { background: rgba(20,30,50,.07); }
 .pcard-pos   {
   position: absolute; top: -8px; right: -8px;
   font-size: 10px; font-weight: 850; padding: 2px 7px;
   border-radius: 99px; letter-spacing: .02em;
 }
-.pcard-name   { font-size: 13px; font-weight: 700; color: #EAEEF7; margin-bottom: 7px; line-height: 1.2; }
+.pcard-name   { font-size: 13px; font-weight: 700; color: #1B2436; margin-bottom: 7px; line-height: 1.2; }
 .pcard-row    { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
 .pcard-role   {
   font-size: 10px; font-weight: 800; letter-spacing: .06em;
   padding: 2px 7px; border-radius: 5px; border: 1px solid;
   background: rgba(0,0,0,.3);
 }
-.pcard-ov     { font-size: 9.5px; font-weight: 700; color: #8A93A8; background: rgba(255,255,255,.07); padding: 2px 6px; border-radius: 4px; }
+.pcard-ov     { font-size: 9.5px; font-weight: 700; color: #677087; background: rgba(20,30,50,.07); padding: 2px 6px; border-radius: 4px; }
 .pcard-bottom { display: flex; justify-content: space-between; align-items: baseline; }
-.pcard-price  { font-size: 11.5px; font-weight: 700; color: #F5C451; }
-.pcard-rating { font-size: 11px; color: #8A93A8; }
+.pcard-price  { font-size: 11.5px; font-weight: 700; color: #B5800F; }
+.pcard-rating { font-size: 11px; color: #677087; }
 
 /* lineup panel */
 .pxi-lineup {
-  background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.07);
+  background: #FFFFFF; border: 1px solid rgba(20,30,50,.1);
   border-radius: 14px; padding: 16px; position: sticky; top: 16px;
+  box-shadow: 0 2px 12px -5px rgba(20,30,50,.14);
 }
-.pxi-lineup-title { font-size: 10px; font-weight: 700; letter-spacing: .14em; color: #8A93A8; margin-bottom: 14px; }
+.pxi-lineup-title { font-size: 10px; font-weight: 700; letter-spacing: .14em; color: #677087; margin-bottom: 14px; }
 
 /* role balance bars */
-.role-bars  { display: flex; flex-direction: column; gap: 7px; margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,.06); }
+.role-bars  { display: flex; flex-direction: column; gap: 7px; margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid rgba(20,30,50,.06); }
 .rb-row     { display: flex; align-items: center; gap: 8px; }
-.rb-lbl     { font-size: 10px; color: #8A93A8; width: 70px; flex: none; }
-.rb-track   { flex: 1; height: 5px; background: rgba(255,255,255,.07); border-radius: 99px; overflow: hidden; }
+.rb-lbl     { font-size: 10px; color: #677087; width: 70px; flex: none; }
+.rb-track   { flex: 1; height: 5px; background: rgba(20,30,50,.07); border-radius: 99px; overflow: hidden; }
 .rb-fill    { height: 100%; border-radius: 99px; transition: width .3s; }
 .rb-val     { font-size: 11px; font-weight: 800; width: 16px; text-align: right; flex: none; }
 
 /* lineup rows */
 .lineup-list { display: flex; flex-direction: column; gap: 4px; }
 .lineup-row  { display: flex; align-items: center; gap: 10px; padding: 7px 6px; border-radius: 9px; }
-.lineup-row:hover { background: rgba(255,255,255,.04); }
+.lineup-row:hover { background: rgba(20,30,50,.04); }
 .lineup-num  { font-size: 11px; font-weight: 800; width: 18px; text-align: center; flex: none; }
-.lineup-num-empty { color: rgba(255,255,255,.2); }
+.lineup-num-empty { color: rgba(20,30,50,.2); }
 .lineup-info { flex: 1; min-width: 0; }
-.lineup-name { font-size: 12.5px; font-weight: 700; color: #EAEEF7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lineup-name { font-size: 12.5px; font-weight: 700; color: #1B2436; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lineup-role { font-size: 10px; font-weight: 800; letter-spacing: .04em; }
 .lineup-slot { opacity: .4; }
 .lineup-slot-hint { font-size: 11px; color: #6B7488; font-style: italic; }
 .lineup-arrows { display: flex; flex-direction: column; gap: 2px; flex: none; }
 .arr-btn {
-  background: rgba(255,255,255,.07); border: none; color: #AEB6C7;
+  background: rgba(20,30,50,.07); border: none; color: #55617A;
   width: 20px; height: 16px; border-radius: 4px; cursor: pointer; font-size: 8px;
   display: grid; place-items: center; line-height: 1;
   transition: background .12s;
 }
-.arr-btn:hover:not(:disabled) { background: rgba(255,255,255,.14); }
+.arr-btn:hover:not(:disabled) { background: rgba(20,30,50,.14); }
 .arr-btn:disabled { opacity: .25; cursor: default; }
 
 /* ── auction theater additions ── */
@@ -2215,23 +2348,23 @@ const styles = `
   background: rgba(245,196,81,.07); border: 1px solid rgba(245,196,81,.18);
   border-radius: 8px;
 }
-.set-strip-name { font-size: 11px; font-weight: 800; letter-spacing: .12em; color: #F5C451; }
-.set-strip-pos  { font-size: 10.5px; color: #8A93A8; }
+.set-strip-name { font-size: 11px; font-weight: 800; letter-spacing: .12em; color: #B5800F; }
+.set-strip-pos  { font-size: 10.5px; color: #677087; }
 
-.star-pill { background: rgba(245,196,81,.15) !important; color: #F5C451 !important; border-color: rgba(245,196,81,.4) !important; }
-.chip-arch { color: #9fb6d9; }
-.chip-fin  { color: #a78bfa; border-color: rgba(167,139,250,.35); }
+.star-pill { background: rgba(245,196,81,.15) !important; color: #B5800F !important; border-color: rgba(245,196,81,.4) !important; }
+.chip-arch { color: #3D6FB0; }
+.chip-fin  { color: #7E5BE0; border-color: rgba(167,139,250,.35); }
 
 /* real-stat strip */
 .stat-strip {
   display: flex; gap: 18px; margin: 10px 0 8px;
-  padding: 10px 14px; background: rgba(255,255,255,.03);
-  border: 1px solid rgba(255,255,255,.07); border-radius: 10px;
+  padding: 10px 14px; background: rgba(20,30,50,.03);
+  border: 1px solid rgba(20,30,50,.07); border-radius: 10px;
   width: fit-content;
 }
 .stat-cell { display: flex; flex-direction: column; gap: 1px; }
-.stat-val  { font-size: 18px; font-weight: 800; color: #EAEEF7; font-family: var(--display-font); letter-spacing: .02em; }
-.stat-gold { color: #F5C451; }
+.stat-val  { font-size: 18px; font-weight: 800; color: #1B2436; font-family: var(--display-font); letter-spacing: .02em; }
+.stat-gold { color: #B5800F; }
 .stat-lbl  { font-size: 8.5px; font-weight: 700; letter-spacing: .1em; color: #6B7488; }
 
 /* squad-need chip */
@@ -2240,13 +2373,13 @@ const styles = `
   font-size: 11px; font-weight: 700; letter-spacing: .04em;
   padding: 5px 11px; border-radius: 7px; border: 1px solid;
 }
-.need-yes { color: #3DDC97; background: rgba(61,220,151,.08); border-color: rgba(61,220,151,.3); }
-.need-no  { color: #6B7488; background: rgba(255,255,255,.03); border-color: rgba(255,255,255,.08); }
+.need-yes { color: #12A06A; background: rgba(61,220,151,.08); border-color: rgba(61,220,151,.3); }
+.need-no  { color: #6B7488; background: rgba(20,30,50,.03); border-color: rgba(20,30,50,.08); }
 
 /* auctioneer beat */
 .going-beat {
   margin-top: 4px; font-size: 13px; font-weight: 900; letter-spacing: .22em;
-  color: #FF5A5F; animation: beat-pulse .5s ease-in-out infinite alternate;
+  color: #DC3A40; animation: beat-pulse .5s ease-in-out infinite alternate;
 }
 @keyframes beat-pulse { from { opacity: .55; } to { opacity: 1; } }
 
@@ -2254,7 +2387,7 @@ const styles = `
 .ff-btn {
   width: 100%; margin-top: 8px; min-height: 38px;
   background: rgba(245,196,81,.1); border: 1px solid rgba(245,196,81,.35);
-  color: #F5C451; font-size: 12px; font-weight: 700;
+  color: #B5800F; font-size: 12px; font-weight: 700;
   border-radius: 9px; cursor: pointer; padding: 8px 10px;
   transition: background .15s;
 }
@@ -2263,15 +2396,15 @@ const styles = `
 /* purse depletion bar on team cards */
 .tc-bar {
   margin-top: 5px; height: 3px; border-radius: 99px;
-  background: rgba(255,255,255,.07); overflow: hidden;
+  background: rgba(20,30,50,.07); overflow: hidden;
 }
 .tc-bar-fill { height: 100%; border-radius: 99px; transition: width .4s; }
 
 /* feed entry kinds */
-.tick-sold  { color: #F5C451; font-weight: 700; }
-.tick-story { color: #9fb6d9; font-style: italic; }
+.tick-sold  { color: #B5800F; font-weight: 700; }
+.tick-story { color: #3D6FB0; font-style: italic; }
 .tick-set   {
-  color: #F5C451; font-weight: 800; font-size: 10.5px; letter-spacing: .1em;
+  color: #B5800F; font-weight: 800; font-size: 10.5px; letter-spacing: .1em;
   border-top: 1px solid rgba(245,196,81,.25); border-bottom: 1px solid rgba(245,196,81,.25);
   padding: 5px 0; margin: 2px 0;
 }
@@ -2287,26 +2420,26 @@ const styles = `
 .wl-count { font-size: 13px; font-weight: 800; }
 .wl-search {
   width: 100%; margin-bottom: 14px; padding: 10px 14px;
-  background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1);
-  border-radius: 10px; color: #EAEEF7; font-size: 13px; outline: none;
+  background: rgba(20,30,50,.05); border: 1px solid rgba(20,30,50,.1);
+  border-radius: 10px; color: #1B2436; font-size: 13px; outline: none;
 }
 .wl-search:focus { border-color: rgba(245,196,81,.4); }
 .wl-body { max-height: 60vh; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; padding-right: 6px; }
 .wl-set-label {
-  font-size: 10px; font-weight: 800; letter-spacing: .12em; color: #F5C451;
+  font-size: 10px; font-weight: 800; letter-spacing: .12em; color: #B5800F;
   margin-bottom: 7px; padding-bottom: 4px; border-bottom: 1px solid rgba(245,196,81,.15);
 }
 .wl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 6px; }
 .wl-card {
   display: flex; align-items: center; gap: 8px; text-align: left;
-  background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.08);
+  background: rgba(20,30,50,.03); border: 1px solid rgba(20,30,50,.08);
   border-radius: 9px; padding: 8px 10px; cursor: pointer;
   transition: background .12s, border-color .12s;
 }
-.wl-card:hover { background: rgba(255,255,255,.07); }
-.wl-on { background: rgba(255,255,255,.06); }
+.wl-card:hover { background: rgba(20,30,50,.07); }
+.wl-on { background: rgba(20,30,50,.06); }
 .wl-star { font-size: 14px; flex: none; }
-.wl-name { font-size: 12px; font-weight: 700; color: #EAEEF7; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wl-name { font-size: 12px; font-weight: 700; color: #1B2436; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .wl-meta { font-size: 9.5px; color: #6B7488; flex: none; }
 
 /* ── season / league ── */
@@ -2315,8 +2448,8 @@ const styles = `
 .season-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
 .cap-row { display: flex; gap: 8px; }
 .cap { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 99px; }
-.cap-orange { background: rgba(245,140,30,.14); color: #ffa94d; }
-.cap-purple { background: rgba(167,139,250,.14); color: #c4b5fd; }
+.cap-orange { background: rgba(245,140,30,.14); color: #C2660C; }
+.cap-purple { background: rgba(167,139,250,.14); color: #6D4FCF; }
 
 .season-body { display: grid; grid-template-columns: 1fr 360px; gap: 16px; align-items: start; }
 @media (max-width: 880px) { .season-body { grid-template-columns: 1fr; } }
@@ -2324,42 +2457,42 @@ const styles = `
 .other-results { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
 
 /* result card */
-.rcard { background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.08); border-radius: 10px; padding: 9px 12px; }
+.rcard { background: #FFFFFF; border: 1px solid rgba(20,30,50,.1); border-radius: 10px; padding: 9px 12px; box-shadow: 0 1px 6px -3px rgba(20,30,50,.1); }
 .rcard-big { padding: 14px 16px; border-width: 1px; }
 .rcard-win  { border-color: rgba(61,220,151,.4); background: rgba(61,220,151,.06); }
 .rcard-loss { border-color: rgba(255,90,95,.35); background: rgba(255,90,95,.05); }
-.rcard-tag { font-size: 10px; font-weight: 800; letter-spacing: .14em; color: #8A93A8; margin-bottom: 8px; }
-.rcard-win .rcard-tag { color: #3DDC97; }
-.rcard-loss .rcard-tag { color: #FF8488; }
+.rcard-tag { font-size: 10px; font-weight: 800; letter-spacing: .14em; color: #677087; margin-bottom: 8px; }
+.rcard-win .rcard-tag { color: #12A06A; }
+.rcard-loss .rcard-tag { color: #D64349; }
 .rcard-inn { display: flex; align-items: center; gap: 10px; padding: 3px 0; }
-.rcard-w .rcard-score { color: #fff; font-weight: 800; }
+.rcard-w .rcard-score { color: #0E1626; font-weight: 800; }
 .rcard-badge { font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 5px; flex: none; min-width: 34px; text-align: center; }
-.rcard-score { font-family: var(--display-font); font-size: 17px; font-weight: 700; color: #C7CEDD; letter-spacing: .02em; }
+.rcard-score { font-family: var(--display-font); font-size: 17px; font-weight: 700; color: #46526B; letter-spacing: .02em; }
 .rcard-ov { font-size: 11px; color: #6B7488; font-family: ui-sans-serif, system-ui; }
-.rcard-stars { font-size: 11px; color: #8A93A8; margin-left: auto; }
-.rcard-result { font-size: 11.5px; color: #9fb6d9; margin-top: 7px; padding-top: 7px; border-top: 1px solid rgba(255,255,255,.06); }
+.rcard-stars { font-size: 11px; color: #677087; margin-left: auto; }
+.rcard-result { font-size: 11.5px; color: #3D6FB0; margin-top: 7px; padding-top: 7px; border-top: 1px solid rgba(20,30,50,.06); }
 .rcard:not(.rcard-big) .rcard-result { font-size: 10.5px; margin-top: 4px; padding-top: 4px; }
 
 /* points table */
-.ptable { background: rgba(255,255,255,.02); border: 1px solid rgba(255,255,255,.07); border-radius: 12px; padding: 12px 14px; }
+.ptable { background: #FFFFFF; border: 1px solid rgba(20,30,50,.1); border-radius: 12px; padding: 12px 14px; box-shadow: 0 2px 10px -4px rgba(20,30,50,.12); }
 .pt-head, .pt-row { display: grid; grid-template-columns: 22px 1fr 22px 22px 22px 52px 32px; align-items: center; gap: 4px; font-size: 12px; }
-.pt-head { font-size: 9.5px; font-weight: 700; letter-spacing: .06em; color: #6B7488; padding: 4px 0 7px; border-bottom: 1px solid rgba(255,255,255,.08); }
-.pt-row { padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,.04); }
+.pt-head { font-size: 9.5px; font-weight: 700; letter-spacing: .06em; color: #6B7488; padding: 4px 0 7px; border-bottom: 1px solid rgba(20,30,50,.08); }
+.pt-row { padding: 6px 0; border-bottom: 1px solid rgba(20,30,50,.04); }
 .pt-pos { color: #6B7488; text-align: center; }
-.pt-q .pt-pos { color: #3DDC97; font-weight: 800; }
+.pt-q .pt-pos { color: #12A06A; font-weight: 800; }
 .pt-you { background: rgba(245,196,81,.06); border-radius: 6px; }
 .pt-badge { font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 5px; }
-.pt-nrr { text-align: right; color: #8A93A8; font-size: 11px; }
-.pt-pts { text-align: right; font-weight: 800; color: #EAEEF7; }
-.pt-q .pt-pts { color: #3DDC97; }
+.pt-nrr { text-align: right; color: #677087; font-size: 11px; }
+.pt-pts { text-align: right; font-weight: 800; color: #1B2436; }
+.pt-q .pt-pts { color: #12A06A; }
 .pt-legend { font-size: 10px; color: #6B7488; margin-top: 8px; display: flex; align-items: center; gap: 6px; }
-.pt-q-dot { width: 7px; height: 7px; border-radius: 50%; background: #3DDC97; }
+.pt-q-dot { width: 7px; height: 7px; border-radius: 50%; background: #12A06A; }
 
 /* playoffs bracket */
 .bracket { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
 @media (max-width: 720px) { .bracket { grid-template-columns: 1fr; } }
-.tie { background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.08); border-radius: 12px; padding: 14px; }
-.tie-label { font-size: 12px; font-weight: 800; letter-spacing: .08em; color: #F5C451; margin-bottom: 10px; }
+.tie { background: #FFFFFF; border: 1px solid rgba(20,30,50,.1); border-radius: 12px; padding: 14px; box-shadow: 0 2px 10px -4px rgba(20,30,50,.12); }
+.tie-label { font-size: 12px; font-weight: 800; letter-spacing: .08em; color: #B5800F; margin-bottom: 10px; }
 .tie-sub { color: #6B7488; font-weight: 600; letter-spacing: 0; }
 .tie-pending { font-size: 12px; color: #6B7488; font-style: italic; padding: 8px 0; }
 .tie-matchup { display: flex; align-items: center; gap: 12px; }
@@ -2368,46 +2501,49 @@ const styles = `
 
 /* over-by-over viewer */
 .ob { max-width: 620px; margin: 0 auto; padding: 8px 2px; }
-.ob-eyebrow { font-size: 11px; font-weight: 800; letter-spacing: .14em; color: #8A93A8; margin-bottom: 14px; text-align: center; }
+.ob-eyebrow { font-size: 11px; font-weight: 800; letter-spacing: .14em; color: #677087; margin-bottom: 14px; text-align: center; }
 .ob-board {
   display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 14px;
-  background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.08);
+  background: #FFFFFF; border: 1px solid rgba(20,30,50,.1);
   border-radius: 14px; padding: 16px 20px; margin-bottom: 14px;
+  box-shadow: 0 2px 10px -4px rgba(20,30,50,.12);
 }
 .ob-team { display: flex; align-items: center; gap: 8px; }
 .ob-batting { font-size: 11px; color: #6B7488; }
-.ob-score { font-family: var(--display-font); font-size: 44px; font-weight: 800; color: #EAEEF7; line-height: 1; }
-.ob-wkts { color: #8A93A8; font-size: 30px; }
-.ob-overs { font-size: 13px; color: #8A93A8; font-weight: 600; }
-.ob-chase { grid-column: 1 / -1; font-size: 13px; color: #9fb6d9; padding-top: 6px; border-top: 1px solid rgba(255,255,255,.07); }
-.ob-chase b { color: #F5C451; }
-.ob-won { color: #3DDC97; }
+.ob-score { font-family: var(--display-font); font-size: 44px; font-weight: 800; color: #1B2436; line-height: 1; }
+.ob-wkts { color: #677087; font-size: 30px; }
+.ob-overs { font-size: 13px; color: #677087; font-weight: 600; }
+.ob-chase { grid-column: 1 / -1; font-size: 13px; color: #3D6FB0; padding-top: 6px; border-top: 1px solid rgba(20,30,50,.07); }
+.ob-chase b { color: #B5800F; }
+.ob-won { color: #12A06A; }
 
-.ob-over { background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.08); border-radius: 12px; padding: 14px 16px; min-height: 90px; }
+.ob-over { background: #FFFFFF; border: 1px solid rgba(20,30,50,.1); border-radius: 12px; padding: 14px 16px; min-height: 90px; box-shadow: 0 1px 6px -3px rgba(20,30,50,.1); }
 .ob-start { color: #6B7488; font-style: italic; display: flex; align-items: center; }
-.ob-over-head { display: flex; justify-content: space-between; font-size: 12px; color: #8A93A8; margin-bottom: 10px; }
-.ob-over-tot { font-weight: 700; color: #C7CEDD; }
+.ob-over-head { display: flex; justify-content: space-between; font-size: 12px; color: #677087; margin-bottom: 10px; }
+.ob-over-tot { font-weight: 700; color: #46526B; }
 .ob-balls { display: flex; gap: 6px; flex-wrap: wrap; }
 .ob-ball { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; font-size: 13px; font-weight: 800; font-family: var(--display-font); }
-.ob-dot { background: rgba(255,255,255,.06); color: #6B7488; }
-.ob-run { background: rgba(255,255,255,.1); color: #C7CEDD; }
-.ob-4   { background: rgba(79,195,247,.18); color: #4FC3F7; }
-.ob-6   { background: rgba(245,196,81,.2); color: #F5C451; }
-.ob-w   { background: rgba(255,90,95,.22); color: #FF8488; }
+.ob-dot { background: rgba(20,30,50,.06); color: #6B7488; }
+.ob-run { background: rgba(20,30,50,.1); color: #46526B; }
+.ob-4   { background: rgba(79,195,247,.18); color: #2E86C8; }
+.ob-6   { background: rgba(245,196,81,.2); color: #B5800F; }
+.ob-w   { background: rgba(255,90,95,.22); color: #D64349; }
 .ob-event { margin-top: 9px; font-size: 12px; font-weight: 800; letter-spacing: .04em; }
-.ob-event-w { color: #FF8488; }
-.ob-event-6 { color: #F5C451; }
+.ob-event-w { color: #D64349; }
+.ob-event-6 { color: #B5800F; }
 .ob-controls { display: flex; justify-content: space-between; gap: 10px; margin-top: 16px; }
-.ob-break { background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.08); border-radius: 14px; padding: 22px; text-align: center; margin-bottom: 16px; }
-.ob-break-score { font-size: 15px; color: #C7CEDD; }
-.ob-break-need { font-size: 14px; color: #9fb6d9; margin-top: 8px; }
-.ob-break-score b, .ob-break-need b { font-family: var(--display-font); font-size: 20px; color: #fff; }
+.ob-break { background: #FFFFFF; border: 1px solid rgba(20,30,50,.1); border-radius: 14px; padding: 22px; text-align: center; margin-bottom: 16px; box-shadow: 0 2px 10px -4px rgba(20,30,50,.12); }
+.ob-break-score { font-size: 15px; color: #46526B; }
+.ob-break-need { font-size: 14px; color: #3D6FB0; margin-top: 8px; }
+.ob-break-score b, .ob-break-need b { font-family: var(--display-font); font-size: 20px; color: #0E1626; }
 
 /* champion screen */
 .champion { text-align: center; padding: 40px 20px; }
 .champ-badge { display: inline-grid; place-items: center; width: 80px; height: 80px; border-radius: 18px; font-size: 26px; font-weight: 800; font-family: var(--display-font); margin-bottom: 16px; }
 .champ-name { font-family: var(--display-font); text-transform: uppercase; font-size: 44px; font-weight: 800; letter-spacing: .01em; margin: 0; }
-.champ-sub { font-size: 14px; color: #9fb6d9; margin-top: 8px; }
+.champ-sub { font-size: 14px; color: #3D6FB0; margin-top: 8px; }
+.finish-pos { font-family: var(--display-font); font-size: 22px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; margin-bottom: 4px; }
+.tie-auto { font-size: 10px; color: #677087; font-style: italic; margin-top: 6px; letter-spacing: .04em; }
 
 /* budget pace warning banner */
 .budget-warn {
@@ -2425,7 +2561,7 @@ const styles = `
 /* rival teams row on Pick XI page */
 .pxi-rivals {
   margin-top: 22px; padding-top: 18px;
-  border-top: 1px solid rgba(255,255,255,.07);
+  border-top: 1px solid rgba(20,30,50,.07);
 }
 .rivals-grid {
   display: grid;
@@ -2435,23 +2571,23 @@ const styles = `
 .rival-card {
   display: flex; align-items: center; gap: 10px;
   padding: 10px 12px; border-radius: 10px;
-  border: 1px solid; background: rgba(255,255,255,.03);
+  border: 1px solid; background: rgba(20,30,50,.03);
   transition: background .15s;
 }
-.rival-card:hover { background: rgba(255,255,255,.07); }
+.rival-card:hover { background: rgba(20,30,50,.07); }
 .rival-info  { flex: 1; min-width: 0; }
-.rival-name  { font-size: 12px; font-weight: 700; color: #EAEEF7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rival-name  { font-size: 12px; font-weight: 700; color: #1B2436; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rival-meta  { font-size: 11px; color: #6B7488; margin-top: 2px; }
 .rival-arrow { font-size: 12px; color: #6B7488; flex: none; }
 
 /* squad-view modal */
 .modal-backdrop {
   position: fixed; inset: 0; z-index: 999;
-  background: rgba(0,0,0,.65); backdrop-filter: blur(4px);
+  background: rgba(15,22,38,.5); backdrop-filter: blur(4px);
   display: flex; align-items: center; justify-content: center;
 }
 .modal-card {
-  background: #111827; border: 1px solid rgba(255,255,255,.12);
+  background: #FFFFFF; border: 1px solid rgba(20,30,50,.14);
   border-radius: 16px; width: 380px; max-width: 96vw;
   max-height: 80vh; display: flex; flex-direction: column;
   overflow: hidden; box-shadow: 0 24px 60px -12px rgba(0,0,0,.7);
@@ -2462,11 +2598,11 @@ const styles = `
   flex: none;
 }
 .modal-close {
-  margin-left: auto; background: rgba(255,255,255,.08); border: none;
-  color: #AEB6C7; width: 28px; height: 28px; border-radius: 7px;
+  margin-left: auto; background: rgba(20,30,50,.08); border: none;
+  color: #55617A; width: 28px; height: 28px; border-radius: 7px;
   cursor: pointer; font-size: 13px; display: grid; place-items: center;
 }
-.modal-close:hover { background: rgba(255,255,255,.16); color: #fff; }
+.modal-close:hover { background: rgba(20,30,50,.16); color: #0E1626; }
 .modal-list {
   overflow-y: auto; padding: 8px 12px 14px;
   display: flex; flex-direction: column; gap: 2px;
@@ -2475,9 +2611,23 @@ const styles = `
   display: flex; align-items: center; gap: 10px;
   padding: 7px 8px; border-radius: 8px;
 }
-.modal-row:hover { background: rgba(255,255,255,.05); }
+.modal-row:hover { background: rgba(20,30,50,.05); }
 .modal-role  { font-size: 10px; font-weight: 800; letter-spacing: .06em; width: 30px; flex: none; }
-.modal-name  { flex: 1; font-size: 13px; font-weight: 600; color: #EAEEF7; }
+.modal-name  { flex: 1; font-size: 13px; font-weight: 600; color: #1B2436; }
 .modal-country { font-size: 11px; color: #6B7488; width: 46px; text-align: right; flex: none; }
-.modal-price { font-size: 12px; font-weight: 700; color: #F5C451; width: 68px; text-align: right; flex: none; }
+.modal-price { font-size: 12px; font-weight: 700; color: #B5800F; width: 68px; text-align: right; flex: none; }
+
+/* drag-and-drop + auto-pick (Pick XI) */
+.auto-btn {
+  border: 1px solid rgba(20,30,50,.16); background: #fff;
+  color: #2E86C8; font-size: 12.5px; font-weight: 800; letter-spacing: .01em;
+  padding: 11px 16px; border-radius: 10px; cursor: pointer; min-height: 44px;
+  transition: background .15s, border-color .15s;
+}
+.auto-btn:hover { background: rgba(46,134,200,.09); border-color: rgba(46,134,200,.5); }
+.pxi-clear { min-height: 44px; }
+.psc { cursor: grab; }
+.psc:active { cursor: grabbing; }
+.pxi-lineup-drop { border-color: #2E86C8 !important; box-shadow: 0 0 0 2px rgba(46,134,200,.3); }
+.drop-hint { color: #2E86C8; font-weight: 800; font-size: 10px; letter-spacing: .04em; margin-left: 6px; }
 `;
