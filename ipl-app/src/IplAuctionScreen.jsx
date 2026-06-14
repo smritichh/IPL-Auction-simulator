@@ -1097,6 +1097,14 @@ function SeasonScreen({ teams, userTeamId, userXI, onRestart }) {
   const schedule = useRef(null);
   if (!schedule.current) schedule.current = makeSchedule(ids);
 
+  // Pre-season projection (one fast Monte-Carlo run, cached for the whole season).
+  const projection = useRef(null);
+  if (!projection.current) {
+    const strengths = {};
+    for (const id of ids) strengths[id] = xiStrength(xis.current[id]);
+    projection.current = projectSeason(ids, strengths, schedule.current, userTeamId, 2000);
+  }
+
   const [day, setDay]         = useState(0);
   const [table, setTable]     = useState(() => emptyTable(ids));
   const [lastRound, setLast]  = useState(null);
@@ -1144,11 +1152,13 @@ function SeasonScreen({ teams, userTeamId, userXI, onRestart }) {
 
   if (view === "playoffs")
     return <PlayoffsScreen teams={teams} userTeamId={userTeamId} xis={xis.current}
-      seeds={top4} teamObj={teamObj} onRestart={onRestart} />;
+      seeds={top4} teamObj={teamObj} onRestart={onRestart}
+      projection={projection.current} pstats={pstats} userSquad={squadOf(userTeamId)} />;
 
   // Didn't make the top 4 → season ends here with the user's league finish.
   if (view === "finished")
-    return <FinishScreen position={userPos} userTeamId={userTeamId} championId={null} onRestart={onRestart} />;
+    return <FinishScreen position={userPos} userTeamId={userTeamId} championId={null} onRestart={onRestart}
+      projection={projection.current} pstats={pstats} squad={squadOf(userTeamId)} />;
 
   return (
     <div className="season">
@@ -1342,21 +1352,178 @@ const ordinal = (n) => {
   const s = ["th", "st", "nd", "rd"], v = n % 100;
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
 };
+const pct = (x) => `${Math.round(x * 100)}%`;
 
-// End-of-season screen — always tells the user exactly where they finished.
-// position 1 = champions, 2 = runners-up, 3 = lost Q2, 4 = lost Eliminator,
-// 5-10 = missed the playoffs (league standing).
-function FinishScreen({ position, userTeamId, championId, onRestart }) {
+// ── Pre-season projection ──────────────────────────────────────────────────
+// Fast strength-based Monte-Carlo (NOT ball-by-ball, so thousands of seasons
+// run in milliseconds). Calibrated so a ~5-pt XI-rating edge ≈ 72% win prob —
+// the same edge the ball-by-ball engine produces (see data/season_test.mjs).
+const xiStrength = (xi) => {
+  if (!xi || !xi.length) return 60;
+  const sorted = [...xi].sort((a, b) => b.rating - a.rating);
+  let w = 0, sw = 0;                       // weight the top 7 a touch higher
+  sorted.forEach((p, i) => { const wt = i < 7 ? 1.2 : 1; w += p.rating * wt; sw += wt; });
+  return w / sw;
+};
+const winProb = (sA, sB) => 1 / (1 + Math.pow(10, -(sA - sB) / 12));
+
+function projectSeason(ids, strengths, rounds, userId, sims = 2000) {
+  const posCount = {};
+  let titleCount = 0, top4Count = 0;
+  for (let s = 0; s < sims; s++) {
+    const pts = {}, nrr = {};
+    for (const id of ids) { pts[id] = 0; nrr[id] = 0; }
+    for (const round of rounds) for (const fx of round) {
+      const homeWin = Math.random() < winProb(strengths[fx.home], strengths[fx.away]);
+      const w = homeWin ? fx.home : fx.away, l = homeWin ? fx.away : fx.home;
+      pts[w] += 2;
+      const m = 0.1 + Math.random() * 0.2;          // noisy NRR so ties break fairly
+      nrr[w] += m; nrr[l] -= m;
+    }
+    const order = [...ids].sort((a, b) => pts[b] - pts[a] || nrr[b] - nrr[a]);
+    const leaguePos = order.indexOf(userId) + 1;
+    if (leaguePos <= 4) top4Count++;
+    const [s1, s2, s3, s4] = order;
+    const ko = (a, b) => Math.random() < winProb(strengths[a], strengths[b]) ? [a, b] : [b, a];
+    const [q1w, q1l] = ko(s1, s2);     // q1w → Final, q1l → Q2
+    const [ew, el]   = ko(s3, s4);     // ew → Q2, el eliminated 4th
+    const [q2w, q2l] = ko(q1l, ew);    // q2w → Final, q2l eliminated 3rd
+    const [ch, ru]   = ko(q1w, q2w);   // ch = champion, ru = runner-up (2nd)
+    let pos;
+    if (leaguePos > 4) pos = leaguePos;
+    else if (userId === ch) pos = 1;
+    else if (userId === ru) pos = 2;
+    else if (userId === q2l) pos = 3;
+    else if (userId === el) pos = 4;
+    else pos = leaguePos;
+    posCount[pos] = (posCount[pos] || 0) + 1;
+    if (ch === userId) titleCount++;
+  }
+  let cum = 0, median = 10;
+  for (let p = 1; p <= 10; p++) { cum += (posCount[p] || 0) / sims; if (cum >= 0.5) { median = p; break; } }
+  return { projPos: median, titleOdds: titleCount / sims, top4Odds: top4Count / sims };
+}
+
+// Best / worst auction buy from the user's squad, judged on league output.
+const perfLine = (st) => {
+  if (!st || (!st.runs && !st.wkts)) return "didn't feature";
+  return [st.runs ? `${st.runs} runs` : null, st.wkts ? `${st.wkts} wkts` : null].filter(Boolean).join(" · ");
+};
+function buyAnalysis(squad, pstats) {
+  const rows = (squad || []).map((p) => {
+    const st = pstats?.[p.name] || { runs: 0, wkts: 0 };
+    const impact = st.runs + st.wkts * 25;
+    const price = Math.max(0.2, p.price ?? p.base ?? 0.2);
+    return { name: p.name, price, st, vpc: impact / price, impact };
+  });
+  const played = rows.filter((r) => r.impact > 0);
+  const best = played.length ? played.reduce((a, b) => (b.vpc > a.vpc ? b : a)) : null;
+  const pricey = rows.filter((r) => r.price >= 3);
+  const worst = pricey.length ? pricey.reduce((a, b) => (b.vpc < a.vpc ? b : a)) : null;
+  return { best, worst };
+}
+
+// ── Shareable result card (canvas → PNG), no deps ──
+const rrect = (ctx, x, y, w, h, r) => {
+  if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); return; }
+  ctx.beginPath();
+  ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+};
+function drawShareCard(ctx, W, H, d) {
+  const F = "Barlow Condensed, Arial Narrow, sans-serif";
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, "#101A2C"); g.addColorStop(1, "#070A14");
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = d.ut.color; ctx.fillRect(0, 0, W, 16);
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#7E8AA3"; ctx.font = `600 30px ${F}`;
+  ctx.fillText("IPL AUCTION SIM · SEASON REPORT", W / 2, 96);
+  // badge
+  ctx.fillStyle = d.ut.color; rrect(ctx, W / 2 - 66, 130, 132, 132, 26); ctx.fill();
+  ctx.fillStyle = d.ut.text; ctx.font = `800 54px ${F}`; ctx.fillText(d.ut.short, W / 2, 215);
+  // headline
+  ctx.fillStyle = d.isChamp ? "#F5C451" : "#FFFFFF"; ctx.font = `800 ${d.isChamp ? 120 : 124}px ${F}`;
+  ctx.fillText(d.isChamp ? "CHAMPIONS" : `FINISHED ${ordinal(d.position).toUpperCase()}`, W / 2, 400);
+  ctx.fillStyle = "#AEB6C7"; ctx.font = `700 42px ${F}`;
+  ctx.fillText(d.ut.name.toUpperCase(), W / 2, 460);
+  // projected vs actual strip
+  ctx.fillStyle = "rgba(255,255,255,.05)"; rrect(ctx, 90, 520, W - 180, 150, 20); ctx.fill();
+  ctx.fillStyle = "#7E8AA3"; ctx.font = `700 26px ${F}`; ctx.textAlign = "left";
+  ctx.fillText("PROJECTED", 140, 575); ctx.fillText("FINISHED", 140, 640);
+  ctx.fillText("TITLE ODDS", W / 2 + 120, 575); ctx.fillText("MADE TOP 4", W / 2 + 120, 640);
+  ctx.fillStyle = "#FFFFFF"; ctx.font = `800 40px ${F}`;
+  ctx.fillText(ordinal(d.projPos), 360, 578);
+  ctx.fillStyle = d.position <= d.projPos ? "#3DDC97" : "#FF8488";
+  ctx.fillText(`${ordinal(d.position)}`, 360, 643);
+  ctx.fillStyle = "#F5C451"; ctx.fillText(pct(d.titleOdds), W / 2 + 320, 578);
+  ctx.fillStyle = "#FFFFFF"; ctx.fillText(pct(d.top4Odds), W / 2 + 320, 643);
+  // best / worst buy
+  ctx.font = `700 28px ${F}`; ctx.fillStyle = "#7E8AA3";
+  ctx.fillText("BEST BUY", 140, 760); ctx.fillText("WORST BUY", 140, 850);
+  ctx.fillStyle = "#FFFFFF"; ctx.font = `700 34px ${F}`;
+  ctx.fillText(d.best ? `${d.best.name}  —  ${perfLine(d.best.st)}` : "—", 360, 762);
+  ctx.fillText(d.worst ? `${d.worst.name}  —  ${perfLine(d.worst.st)}` : "—", 360, 852);
+  // footer
+  ctx.textAlign = "center"; ctx.fillStyle = "#5B647A"; ctx.font = `600 26px ${F}`;
+  ctx.fillText("Built from the auction floor · 258 real players", W / 2, H - 60);
+}
+
+// End-of-season screen — always tells the user where they finished, reveals the
+// pre-season projection vs the real result, names the best/worst auction buy,
+// and exports a shareable image. position 1 = champions … 5-10 = missed top 4.
+function FinishScreen({ position, userTeamId, championId, onRestart, projection, pstats, squad }) {
   const meta = (id) => TEAMS.find((t) => t.id === id);
   const ut = meta(userTeamId);
   const champ = championId ? meta(championId) : null;
   const isChamp = position === 1;
+  const proj = projection || { projPos: position, titleOdds: 0, top4Odds: 0 };
+  const { best, worst } = buyAnalysis(squad, pstats);
+  const delta = proj.projPos - position;   // + = finished better than projected
+  const verdict = delta > 0 ? { t: `OVERPERFORMED +${delta}`, c: "#12A06A" }
+    : delta < 0 ? { t: `UNDERPERFORMED ${delta}`, c: "#DC3A40" }
+    : { t: "RIGHT ON PROJECTION", c: "#677087" };
   const blurb = isChamp
     ? "🏆 You built this squad from the auction floor. Champions."
     : position === 2 ? `So close — runners-up.${champ ? ` ${champ.name} took the title.` : ""}`
     : position === 3 ? `Knocked out in Qualifier 2.${champ ? ` ${champ.name} won it.` : ""}`
     : position === 4 ? `Knocked out in the Eliminator.${champ ? ` ${champ.name} won it.` : ""}`
     : "Missed the playoffs — only the top 4 go through.";
+
+  const shareData = { ut, position, isChamp, projPos: proj.projPos, titleOdds: proj.titleOdds, top4Odds: proj.top4Odds, best, worst };
+  const saveImage = () => {
+    const W = 1080, H = 1080;
+    const c = document.createElement("canvas");
+    c.width = W; c.height = H;
+    drawShareCard(c.getContext("2d"), W, H, shareData);
+    c.toBlob((blob) => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `ipl-auction-${ut.short}-${ordinal(position)}.png`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    });
+  };
+  const [copied, setCopied] = useState(false);
+  const copyText = () => {
+    const txt = `🏏 IPL Auction Sim — ${ut.name}\n`
+      + `${isChamp ? "CHAMPIONS 🏆" : `Finished ${ordinal(position)}`} (projected ${ordinal(proj.projPos)}) · pre-season title odds ${pct(proj.titleOdds)}\n`
+      + (best ? `Best buy: ${best.name} (${perfLine(best.st)})\n` : "")
+      + (worst ? `Worst buy: ${worst.name} (${perfLine(worst.st)})` : "");
+    const flash = () => { setCopied(true); setTimeout(() => setCopied(false), 1800); };
+    const fallback = () => {
+      try {
+        const ta = document.createElement("textarea");
+        ta.value = txt; ta.style.position = "fixed"; ta.style.opacity = "0";
+        document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove();
+      } catch { /* clipboard unavailable — nothing else to do */ }
+    };
+    if (navigator.clipboard?.writeText)
+      navigator.clipboard.writeText(txt).then(flash, () => { fallback(); flash(); });
+    else { fallback(); flash(); }
+  };
+
   return (
     <div className="champion">
       <div className="champ-badge" style={{ background: ut.color, color: ut.text }}>{ut.short}</div>
@@ -1365,7 +1532,27 @@ function FinishScreen({ position, userTeamId, championId, onRestart }) {
       </div>
       <h1 className="champ-name">{ut.name}</h1>
       <div className="champ-sub">{blurb}</div>
-      <button className="bid-btn" onClick={onRestart} style={{ marginTop: 18 }}>Run it back ↻</button>
+
+      {/* Season report — projection vs reality + value calls */}
+      <div className="report">
+        <div className="report-row">
+          <div className="report-cell"><span className="report-lbl">PROJECTED</span><span className="report-val">{ordinal(proj.projPos)}</span></div>
+          <div className="report-cell"><span className="report-lbl">FINISHED</span><span className="report-val" style={{ color: delta >= 0 ? "#12A06A" : "#DC3A40" }}>{ordinal(position)}</span></div>
+          <div className="report-cell"><span className="report-lbl">TITLE ODDS</span><span className="report-val" style={{ color: "#B5800F" }}>{pct(proj.titleOdds)}</span></div>
+          <div className="report-cell"><span className="report-lbl">TOP 4 ODDS</span><span className="report-val">{pct(proj.top4Odds)}</span></div>
+        </div>
+        <div className="report-verdict" style={{ color: verdict.c }}>{verdict.t}</div>
+        <div className="report-buys">
+          <div className="buy"><span className="buy-tag buy-best">BEST BUY</span>{best ? <span className="buy-txt"><b>{best.name}</b> · {perfLine(best.st)} · {cr(best.price)}</span> : <span className="buy-txt">—</span>}</div>
+          <div className="buy"><span className="buy-tag buy-worst">WORST BUY</span>{worst ? <span className="buy-txt"><b>{worst.name}</b> · {perfLine(worst.st)} · {cr(worst.price)}</span> : <span className="buy-txt">—</span>}</div>
+        </div>
+      </div>
+
+      <div className="finish-actions">
+        <button className="bid-btn" onClick={saveImage}>📸 Save image</button>
+        <button className="auto-btn" onClick={copyText}>{copied ? "Copied ✓" : "Copy result"}</button>
+        <button className="out-btn" onClick={onRestart}>Run it back ↻</button>
+      </div>
     </div>
   );
 }
@@ -1374,7 +1561,7 @@ function FinishScreen({ position, userTeamId, championId, onRestart }) {
    The user plays only their own knockouts over-by-over; every other tie
    auto-simulates the moment its inputs are known, so a champion is always
    crowned and the user's finishing position is always resolvable. */
-function PlayoffsScreen({ teams, userTeamId, xis, seeds, teamObj, onRestart }) {
+function PlayoffsScreen({ teams, userTeamId, xis, seeds, teamObj, onRestart, projection, pstats, userSquad }) {
   const meta = (id) => TEAMS.find((t) => t.id === id);
   const [s1, s2, s3, s4] = seeds;
   const [ties, setTies] = useState({ q1: null, elim: null, q2: null, final: null });
@@ -1427,7 +1614,8 @@ function PlayoffsScreen({ teams, userTeamId, xis, seeds, teamObj, onRestart }) {
   else if (inTie(q2, userTeamId) && L(q2) === userTeamId) finishPos = 3;
   else if (inTie(elim, userTeamId) && L(elim) === userTeamId) finishPos = 4;
   if (finishPos != null)
-    return <FinishScreen position={finishPos} userTeamId={userTeamId} championId={champion} onRestart={onRestart} />;
+    return <FinishScreen position={finishPos} userTeamId={userTeamId} championId={champion} onRestart={onRestart}
+      projection={projection} pstats={pstats} squad={userSquad} />;
 
   const mine = (a, b) => a === userTeamId || b === userTeamId;
   const q2A = q1 ? L(q1) : null, q2B = elim?.winner ?? null;
@@ -2544,6 +2732,26 @@ const styles = `
 .champ-sub { font-size: 14px; color: #3D6FB0; margin-top: 8px; }
 .finish-pos { font-family: var(--display-font); font-size: 22px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; margin-bottom: 4px; }
 .tie-auto { font-size: 10px; color: #677087; font-style: italic; margin-top: 6px; letter-spacing: .04em; }
+
+/* season report (FinishScreen) */
+.report {
+  max-width: 560px; margin: 22px auto 0; text-align: left;
+  background: #FFFFFF; border: 1px solid rgba(20,30,50,.1); border-radius: 14px;
+  padding: 18px 20px; box-shadow: 0 2px 12px -5px rgba(20,30,50,.14);
+}
+.report-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.report-cell { display: flex; flex-direction: column; gap: 3px; }
+.report-lbl { font-size: 9px; font-weight: 700; letter-spacing: .1em; color: #677087; }
+.report-val { font-family: var(--display-font); font-size: 26px; font-weight: 800; color: #1B2436; line-height: 1; }
+.report-verdict { margin-top: 14px; font-size: 12px; font-weight: 800; letter-spacing: .12em; text-align: center; }
+.report-buys { margin-top: 14px; padding-top: 14px; border-top: 1px solid rgba(20,30,50,.08); display: flex; flex-direction: column; gap: 9px; }
+.buy { display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: #46526B; }
+.buy-tag { font-size: 8.5px; font-weight: 800; letter-spacing: .06em; padding: 4px 7px; border-radius: 5px; flex: none; width: 74px; text-align: center; }
+.buy-best { background: rgba(18,160,106,.12); color: #12A06A; }
+.buy-worst { background: rgba(220,58,64,.1); color: #DC3A40; }
+.buy-txt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.buy-txt b { color: #1B2436; }
+.finish-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 20px; }
 
 /* budget pace warning banner */
 .budget-warn {
