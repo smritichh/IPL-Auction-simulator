@@ -84,13 +84,29 @@ def derive(name, role, tier):
         finisher = False
 
     # ---- data-driven rating 45-95 ----
+    # Career metrics set the baseline, but recent form (latest 2 seasons) is
+    # weighted 60% when there's a meaningful recent sample (>=120 balls) — a
+    # player surging or fading over 2024-26 moves more than career aggregate.
     anchor = {"Marquee":87,"Star":79,"Established":69,"Emerging":60,"Uncapped":51}[tier]
+    bat_r = s.get("bat_recent") if s else None
+    bowl_r = s.get("bowl_recent") if s else None
+    def blend(career_v, recent_v, use_recent, default):
+        cv = career_v if career_v is not None else default
+        if use_recent and recent_v is not None:
+            return 0.6*recent_v + 0.4*cv
+        return cv
     adj = 0.0
     if bat and bat.get("balls",0) >= 200 and batOrder in ("top","mid"):
-        sr = bat.get("sr",0); avg = bat.get("avg") or 20
+        r_ok = bool(bat_r and bat_r.get("balls",0) >= 120)
+        sr  = blend(bat.get("sr"),  (bat_r or {}).get("sr"),  r_ok, 0)  or 0
+        avg = blend(bat.get("avg"), (bat_r or {}).get("avg"), r_ok, 20) or 20
         adj = max(adj, clip((sr-128)/30,-1.2,1.2)*4 + clip((avg-28)/16,-1.2,1.2)*4)
     if bw and bw.get("balls",0) >= 300:
-        econ = bw.get("econ",9); wpm = bw["wkts"]/max(1,bw["balls"]/24)
+        r_ok = bool(bowl_r and bowl_r.get("balls",0) >= 120)
+        econ = blend(bw.get("econ"), (bowl_r or {}).get("econ"), r_ok, 9) or 9
+        wpm_c = bw["wkts"]/max(1,bw["balls"]/24)
+        wpm_r = (bowl_r["wkts"]/max(1,bowl_r["balls"]/24)) if r_ok else wpm_c
+        wpm = (0.6*wpm_r + 0.4*wpm_c) if r_ok else wpm_c
         adj = max(adj, clip((8.4-econ)/2.2,-1.2,1.2)*4 + clip((wpm-1)/0.8,-1.2,1.2)*4)
     # recency: drop rating for players who haven't featured recently
     if s and s.get("recent_matches",0) == 0 and s.get("last_season",0) < 2023:
