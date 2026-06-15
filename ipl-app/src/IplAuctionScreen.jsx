@@ -115,6 +115,13 @@ function valuation(team, p, v, lotsLeft, activeNeeders) {
   if (maxAfford <= 0) return 0;
   const avgPerSlot = team.purse / effSlots;
   const nm = needMult(p, team.squad, team.bias);
+  // Hard keeper guarantee: a team with NO wicketkeeper treats any keeper as a
+  // must-buy (there are cheap ones in the pool), so no squad ever ends the
+  // auction unable to field a legal XI. Bids strongly, never beyond its purse.
+  if (p.wk && !team.squad.some((s) => s.wk)) {
+    const want = Math.max(p.base + 0.5, v * nm * 2, avgPerSlot * 1.2);
+    return Math.min(want, team.purse);
+  }
   // Competition-aware urgency.
   const myShare = lotsLeft / Math.max(1, activeNeeders);
   const pressure = slotsNeeded / Math.max(0.5, myShare);
@@ -1817,15 +1824,20 @@ function PickXIScreen({ squad, onLock, teams = [], userTeamId }) {
   // bowl 20 overs (max 4 each), so this is a hard requirement, not a warning.
   const bowlOptions = roleCounts.Bowler + roleCounts["All-rounder"];
 
+  // Only require a keeper in the XI if the squad actually has one — otherwise a
+  // keeperless squad would be soft-locked. No specialist keeper → a batter keeps.
+  const squadHasKeeper = squad.some((p) => p.wk);
+
   // Blocking requirements (must satisfy to lock) vs soft warnings.
   const blockers = [];
-  if (lineup.length === 11 && roleCounts.WK === 0) blockers.push("Pick a wicket-keeper");
+  if (lineup.length === 11 && roleCounts.WK === 0 && squadHasKeeper) blockers.push("Pick a wicket-keeper");
   if (lineup.length === 11 && bowlOptions < 5)     blockers.push(`Need 5 bowling options (have ${bowlOptions})`);
   const canLock = lineup.length === 11 && !blockers.length;
 
   // Soft warnings (don't block).
   const warnings = [...blockers];
-  if (!blockers.length && (roleCounts.WK + roleCounts.Batter) > 6) warnings.push("Heavy on pure batters");
+  if (!blockers.length && !squadHasKeeper && lineup.length === 11) warnings.push("No specialist keeper — a top-order batter will keep");
+  else if (!blockers.length && (roleCounts.WK + roleCounts.Batter) > 6) warnings.push("Heavy on pure batters");
 
   return (
     <div className="pickxi">

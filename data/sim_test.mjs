@@ -61,6 +61,12 @@ function valuation(team, p, v, lotsLeft, activeNeeders, bias){
   if(maxAfford <= 0) return 0;
   const avgPerSlot = team.purse / effSlots;
   const nm = needMult(p, team.squad, bias);
+  // Hard keeper guarantee (mirrors IplAuctionScreen.jsx): a keeperless team
+  // treats any keeper as a must-buy so no squad ends unable to field a keeper.
+  if (p.wk && !team.squad.some((s) => s.wk)) {
+    const want = Math.max(p.base + 0.5, v * nm * 2, avgPerSlot * 1.2);
+    return Math.min(want, team.purse);
+  }
   const myShare = lotsLeft / Math.max(1, activeNeeders);
   const pressure = slotsNeeded / Math.max(0.5, myShare);
   const minDeficit = Math.max(0, SQUAD_MIN - n);
