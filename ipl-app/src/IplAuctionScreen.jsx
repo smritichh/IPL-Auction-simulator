@@ -429,6 +429,13 @@ export default function IplAuctionScreen() {
     return resolve(finalState);
   });
 
+  // You can't abandon a lot you're leading: if the user holds the top bid when
+  // an autopilot / skip-set fast-forward fires, that lot is resolved on the spot
+  // (rivals get their last responses, then the hammer falls) before fast-forward
+  // proceeds — so a standing bid is always honoured, never silently discarded.
+  const commitIfUserLeads = (g) =>
+    (g.phase === "bidding" && g.leader === g.userTeamId) ? resolve(simulateRemainingBids(g)) : g;
+
   // Core fast-sim: resolve lots [startIdx, endIdx) instantly with ALL 10 teams —
   // including the user's — bidding via the same squad-need valuation. Used by
   // both Autopilot (to the end) and fast-forward (to the next starred lot).
@@ -537,8 +544,9 @@ export default function IplAuctionScreen() {
   // Skip the rest of the current set — the AI resolves every remaining lot in it
   // (your team still bids via the same engine) and hands control back at the
   // first lot of the next set. If this is the last set, finish the auction.
-  const skipSet = () => setGame((g) => {
-    if (g.phase !== "bidding" && g.phase !== "sold") return g;
+  const skipSet = () => setGame((g0) => {
+    if (g0.phase !== "bidding" && g0.phase !== "sold") return g0;
+    const g = commitIfUserLeads(g0);   // can't bail on a lot you're winning
     const startIdx = g.phase === "sold" ? g.index + 1 : g.index;
     const stop = nextSetIdx(g);
     if (stop < 0) {
@@ -572,7 +580,7 @@ export default function IplAuctionScreen() {
   const doAutopilot = () => {
     apConfirmRef.current = false;
     setApConfirm(false);
-    setGame((g) => simulateAllRemainingLots(g));
+    setGame((g) => simulateAllRemainingLots(commitIfUserLeads(g)));
   };
 
   const lockXI  = (xi) => setGame((g) => ({ ...g, phase: "season", xi }));
