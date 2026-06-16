@@ -100,6 +100,54 @@ export function battingOrder(xi) {
   return [...xi].sort((a, b) => batKey(a) - batKey(b) || b.rating - a.rating);
 }
 
+// ── Team strength (pre-match readout + the season projection) ────────────────
+// Decomposes an XI into a batting and a bowling rating on the same 0–100 scale
+// as player ratings, plus a blended `overall`. `overall` is kept numerically
+// equal to the old top-7-weighted XI strength for a balanced XI — so the season
+// Monte-Carlo stays calibrated — and balance penalties only ever REDUCE it (and
+// are zero for a legal, balanced XI). `penalties` lists any that fired.
+export function teamStrength(xi) {
+  if (!xi || !xi.length) return { batting: 60, bowling: 60, overall: 60, penalties: [] };
+
+  // Batting: order-weight the contributors. Openers/top order matter most, the
+  // tail least. Batters, keepers and all-rounders all bat.
+  const bats = battingOrder(xi).filter((p) => p.role !== "Bowler");
+  const batW = (i) => (i < 2 ? 1.3 : i < 4 ? 1.15 : i < 6 ? 1.0 : 0.65);
+  let bw = 0, bsw = 0;
+  bats.forEach((p, i) => { const w = batW(i); bw += p.rating * w; bsw += w; });
+  const batting = bsw ? bw / bsw : 60;
+
+  // Bowling: the best 5 bowling options, with a small bump for genuine bowlers
+  // and death specialists over part-time all-rounders. Missing options (a squad
+  // short of 5) count as a weak 45 — a batter rolling their arm over.
+  const opts = xi.filter(canBowl).sort((a, b) => b.rating - a.rating);
+  const bonus = (p) => (p.role === "Bowler" ? 3 : 0) + (p.deathSpec ? 3 : 0) + (p.bowlType ? 1 : 0);
+  const five = opts.slice(0, 5);
+  let ow = 0;
+  five.forEach((p) => { ow += Math.min(100, p.rating + bonus(p)); });
+  const bowling = (ow + (5 - five.length) * 45) / 5;
+
+  // Overall: the original top-7-weighted blend (keeps the projection calibrated).
+  const sorted = [...xi].sort((a, b) => b.rating - a.rating);
+  let w = 0, sw = 0;
+  sorted.forEach((p, i) => { const wt = i < 7 ? 1.2 : 1; w += p.rating * wt; sw += wt; });
+  let overall = w / sw;
+
+  // Balance penalties — subtract only; zero for a balanced legal XI.
+  const penalties = [];
+  if (opts.length < 5) { overall -= (5 - opts.length) * 2.5; penalties.push(`only ${opts.length} bowling options`); }
+  if (!xi.some((p) => p.wk)) { overall -= 3; penalties.push("no specialist keeper"); }
+  const os = xi.filter((p) => p.overseas).length;
+  if (os > 4) { overall -= (os - 4) * 2; penalties.push(`${os} overseas in the XI`); }
+
+  return {
+    batting: Math.round(batting),
+    bowling: Math.round(bowling),
+    overall: Math.round(overall * 10) / 10,
+    penalties,
+  };
+}
+
 // Bowling plan: 20 overs, max 4 per bowler, allocated by phase suitability.
 // Death specialists close, spinners work the middle, the rest open.
 function bowlingPlan(xi) {

@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { Gavel, ChevronRight } from "lucide-react";
 import { PLAYERS } from "./players";
-import { pickXI, battingOrder, simulateMatch, innViews, oversFromBalls } from "./matchEngine";
+import { pickXI, battingOrder, simulateMatch, innViews, oversFromBalls, teamStrength } from "./matchEngine";
 import { makeSchedule, emptyTable, applyResult, standings, nrrOf } from "./season";
+import { analyzeMatch } from "./matchDiagnostics";
 
 const OPEN_TIMER = 7;
 const BID_TIMER  = 4.5;
@@ -1152,8 +1153,43 @@ function SeasonScreen({ teams, userTeamId, userXI, onRestart }) {
   const [lastRound, setLast]  = useState(null);
   const [pstats, setPstats]   = useState({});   // name → {runs, wkts, team}
   const [view, setView]       = useState("league");  // league | playoffs
+  const [xiVersion, setXiVer] = useState(0);     // bump → re-read the changed XI
+  const [repick, setRepick]   = useState(false); // mid-season "change XI" overlay
+  const [adjustedDay, setAdjustedDay] = useState(-1); // last day the user re-picked on
+
+  // Your team rating. xiVersion is the manual invalidation token for the xis
+  // ref — bumped by updateXI whenever the XI changes (never mutate xis.current
+  // without bumping it, or this won't refresh).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const userStrength = useMemo(() => teamStrength(xis.current[userTeamId]), [xiVersion]);
+
+  // Live "probable finish": re-run the fast Monte-Carlo from the CURRENT table
+  // over the REMAINING rounds, using the user's (possibly changed) XI. At day 0
+  // — empty table, full schedule — this equals the pre-season projection.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const liveProj = useMemo(() => {
+    const strengths = {}, basePts = {}, baseNrr = {};
+    for (const id of ids) {
+      strengths[id] = teamStrength(xis.current[id]).overall;
+      basePts[id] = table[id].pts;
+      // Real NRR runs ±1.5; the sim only accrues ±0.2/game, so damp the seed
+      // toward the sim's scale — it should nudge tie-breaks, not dominate them.
+      baseNrr[id] = nrrOf(table[id]) * 0.5;
+    }
+    return projectSeason(ids, strengths, schedule.current.slice(day), userTeamId, 1500, basePts, baseNrr);
+  }, [day, table, xiVersion]);
 
   const teamObj = (id) => ({ ...meta(id), squad: squadOf(id), xi: xis.current[id] });
+
+  // Swap in a new XI mid-season. Already-played matches stand; the remaining
+  // rounds read the new XI lazily (xis is a ref), and the live projection +
+  // strength panel refresh via the version bump.
+  const updateXI = (newXI) => {
+    xis.current[userTeamId] = newXI;
+    setXiVer((v) => v + 1);
+    setAdjustedDay(day);   // mark this match-day's loss as already acted on
+    setRepick(false);
+  };
 
   const playRound = (roundIdx, tbl, stats) => {
     const round = schedule.current[roundIdx];
@@ -1188,9 +1224,20 @@ function SeasonScreen({ teams, userTeamId, userXI, onRestart }) {
   const purple = Object.entries(pstats).sort((a, b) => b[1].wkts - a[1].wkts)[0];
 
   const userMatch = lastRound?.find((m) => m.home === userTeamId || m.away === userTeamId);
+  const analysis  = userMatch ? analyzeMatch(userMatch, userTeamId) : null;
 
   const userPos = table_.findIndex((r) => r.id === userTeamId) + 1;
   const userQualified = top4.includes(userTeamId);
+
+  // Mid-season "change your combination" — reuses the full Pick XI builder,
+  // seeded with the current XI. SeasonScreen stays mounted, so the season state
+  // (day / table / pstats) is preserved underneath.
+  if (repick)
+    return (
+      <PickXIScreen squad={squadOf(userTeamId)} onLock={updateXI}
+        teams={teams} userTeamId={userTeamId}
+        initialXI={xis.current[userTeamId]} onCancel={() => setRepick(false)} />
+    );
 
   if (view === "playoffs")
     return <PlayoffsScreen teams={teams} userTeamId={userTeamId} xis={xis.current}
@@ -1229,6 +1276,27 @@ function SeasonScreen({ teams, userTeamId, userXI, onRestart }) {
         </div>
       </div>
 
+      {/* Your team rating + live probable finish — always visible */}
+      <div className="team-strip">
+        <div className="ts-team">
+          <span className="ts-badge" style={{ background: meta(userTeamId).color, color: meta(userTeamId).text }}>{meta(userTeamId).short}</span>
+          <div className="ts-team-tx">
+            <span className="ts-team-k">YOUR XI</span>
+            {userStrength.penalties.length > 0 && <span className="ts-pen">⚠ {userStrength.penalties[0]}</span>}
+          </div>
+        </div>
+        <div className="ts-ratings">
+          <div className="ts-rt"><span className="ts-rt-k">BAT</span><span className="ts-rt-v">{userStrength.batting}</span></div>
+          <div className="ts-rt"><span className="ts-rt-k">BOWL</span><span className="ts-rt-v">{userStrength.bowling}</span></div>
+          <div className="ts-rt ts-rt-ovr"><span className="ts-rt-k">OVERALL</span><span className="ts-rt-v">{Math.round(userStrength.overall)}</span></div>
+        </div>
+        <div className="ts-proj">
+          <div className="ts-pj"><span className="ts-pj-v">{ordinal(liveProj.projPos)}</span><span className="ts-pj-k">probable finish</span></div>
+          <div className="ts-pj"><span className="ts-pj-v">{Math.round(liveProj.top4Odds * 100)}%</span><span className="ts-pj-k">top 4</span></div>
+          <div className="ts-pj"><span className="ts-pj-v ts-pj-gold">{Math.round(liveProj.titleOdds * 100)}%</span><span className="ts-pj-k">title</span></div>
+        </div>
+      </div>
+
       <div className="season-body">
         {/* LEFT — latest match day results */}
         <div className="season-results">
@@ -1238,6 +1306,9 @@ function SeasonScreen({ teams, userTeamId, userXI, onRestart }) {
           ) : (
             <>
               {userMatch && <ResultCard m={userMatch} meta={meta} highlight userTeamId={userTeamId} />}
+              {analysis && analysis.lost && (
+                <MatchAnalysis a={analysis} canChange={!leagueDone} adjusted={adjustedDay === day} onChangeXI={() => setRepick(true)} />
+              )}
               <div className="other-results">
                 {lastRound.filter((m) => m !== userMatch).map((m, i) => (
                   <ResultCard key={i} m={m} meta={meta} userTeamId={userTeamId} />
@@ -1270,6 +1341,55 @@ function SeasonScreen({ teams, userTeamId, userXI, onRestart }) {
           <div className="pt-legend"><span className="pt-q-dot" /> top 4 qualify</div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ── Post-loss diagnosis: "what went wrong" + offer to change the XI ── */
+function MatchAnalysis({ a, canChange, adjusted, onChangeXI }) {
+  const PH = [
+    { k: "pp", label: "PP" }, { k: "mid", label: "MID" }, { k: "death", label: "DEATH" },
+  ];
+  return (
+    <div className="manal">
+      <div className="manal-hd">
+        <span className="manal-eye">WHAT WENT WRONG</span>
+        <span className="manal-headline">{a.headline}</span>
+      </div>
+      <div className="manal-ctx">{a.context}</div>
+      {a.factors.length > 0 && (
+        <div className="manal-factors">
+          {a.factors.map((f, i) => (
+            <div key={i} className="manal-f">
+              <span className="manal-f-label">{f.label}</span>
+              <span className="manal-f-detail">{f.detail}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {/* compact phase breakdown: your batting vs the runs you conceded */}
+      <div className="manal-phases">
+        {["bat", "bowl"].map((side) => (
+          <div key={side} className="manal-prow">
+            <span className="manal-prow-k">{side === "bat" ? "YOU BATTED" : "YOU BOWLED"}</span>
+            {PH.map((p) => (
+              <span key={p.k} className="manal-ph">
+                <b>{p.label}</b> {a[side][p.k].runs}/{a[side][p.k].wkts}
+              </span>
+            ))}
+          </div>
+        ))}
+      </div>
+      {adjusted ? (
+        <div className="manal-cta">
+          <span className="manal-done">✓ XI updated — your new combination plays from the next match.</span>
+        </div>
+      ) : canChange ? (
+        <div className="manal-cta">
+          <span className="manal-cta-note">Change your combination before the next match.</span>
+          <button className="bid-btn" onClick={onChangeXI}>Adjust your XI →</button>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1400,21 +1520,20 @@ const pct = (x) => `${Math.round(x * 100)}%`;
 // Fast strength-based Monte-Carlo (NOT ball-by-ball, so thousands of seasons
 // run in milliseconds). Calibrated so a ~5-pt XI-rating edge ≈ 72% win prob —
 // the same edge the ball-by-ball engine produces (see data/season_test.mjs).
-const xiStrength = (xi) => {
-  if (!xi || !xi.length) return 60;
-  const sorted = [...xi].sort((a, b) => b.rating - a.rating);
-  let w = 0, sw = 0;                       // weight the top 7 a touch higher
-  sorted.forEach((p, i) => { const wt = i < 7 ? 1.2 : 1; w += p.rating * wt; sw += wt; });
-  return w / sw;
-};
+// Single 0–100 strength used by the Monte-Carlo — the `overall` from
+// teamStrength (the same top-7-weighted blend, minus any balance penalties).
+const xiStrength = (xi) => teamStrength(xi).overall;
 const winProb = (sA, sB) => 1 / (1 + Math.pow(10, -(sA - sB) / 12));
 
-function projectSeason(ids, strengths, rounds, userId, sims = 2000) {
+// `basePts`/`baseNrr` seed the sim from the CURRENT standings so it can be
+// re-run mid-season over only the remaining `rounds` (live "probable finish").
+// Omit them (the pre-season call) to start every team from 0.
+function projectSeason(ids, strengths, rounds, userId, sims = 2000, basePts = null, baseNrr = null) {
   const posCount = {};
   let titleCount = 0, top4Count = 0;
   for (let s = 0; s < sims; s++) {
     const pts = {}, nrr = {};
-    for (const id of ids) { pts[id] = 0; nrr[id] = 0; }
+    for (const id of ids) { pts[id] = basePts ? (basePts[id] || 0) : 0; nrr[id] = baseNrr ? (baseNrr[id] || 0) : 0; }
     for (const round of rounds) for (const fx of round) {
       const homeWin = Math.random() < winProb(strengths[fx.home], strengths[fx.away]);
       const w = homeWin ? fx.home : fx.away, l = homeWin ? fx.away : fx.home;
@@ -1773,9 +1892,9 @@ function Summary({ me, teams, onRestart }) {
 }
 
 /* ── PickXI Screen ── */
-function PickXIScreen({ squad, onLock, teams = [], userTeamId }) {
-  const [lineup, setLineup]   = useState([]);
-  const [selSet, setSelSet]   = useState(new Set());
+function PickXIScreen({ squad, onLock, teams = [], userTeamId, initialXI = null, onCancel = null }) {
+  const [lineup, setLineup]   = useState(() => (initialXI ? [...initialXI] : []));
+  const [selSet, setSelSet]   = useState(() => new Set((initialXI || []).map((p) => p.name)));
   const [viewTeam, setViewTeam] = useState(null); // teamId for rival squad modal
   const [dropActive, setDropActive] = useState(false); // drag-over highlight on the XI panel
 
@@ -1891,12 +2010,23 @@ function PickXIScreen({ squad, onLock, teams = [], userTeamId }) {
           </div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
+          {lineup.length >= 7 && (() => {
+            const st = teamStrength(lineup);
+            return (
+              <div className="pxi-strength">
+                <span className="pxi-st"><b>BAT</b> {st.batting}</span>
+                <span className="pxi-st"><b>BOWL</b> {st.bowling}</span>
+                <span className="pxi-st pxi-st-ovr"><b>OVR</b> {Math.round(st.overall)}</span>
+              </div>
+            );
+          })()}
           {warnings.length > 0 && <div className="pxi-warn">{warnings[0]}</div>}
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {onCancel && <button className="out-btn" onClick={onCancel}>← Back</button>}
             <button className="auto-btn" onClick={autoPick}>✨ Auto-pick best XI</button>
             {lineup.length > 0 && <button className="out-btn pxi-clear" onClick={clearXI}>Clear</button>}
             <button className="bid-btn pxi-lock" onClick={() => onLock(lineup)} disabled={!canLock}>
-              {lineup.length < 11 ? `${lineup.length} / 11 selected` : blockers.length ? "Fix your XI" : "Lock XI →"}
+              {lineup.length < 11 ? `${lineup.length} / 11 selected` : blockers.length ? "Fix your XI" : (onCancel ? "Save XI →" : "Lock XI →")}
             </button>
           </div>
         </div>
@@ -2729,6 +2859,57 @@ const styles = `
 .pt-q .pt-pts { color: #12A06A; }
 .pt-legend { font-size: 10px; color: #6B7488; margin-top: 8px; display: flex; align-items: center; gap: 6px; }
 .pt-q-dot { width: 7px; height: 7px; border-radius: 50%; background: #12A06A; }
+
+/* team strength + live probable-finish strip */
+.team-strip { display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+  background: #FFFFFF; border: 1px solid rgba(20,30,50,.1); border-radius: 12px;
+  padding: 10px 16px; margin-bottom: 14px; box-shadow: 0 2px 10px -4px rgba(20,30,50,.12); }
+.ts-team { display: flex; align-items: center; gap: 9px; }
+.ts-badge { font-size: 12px; font-weight: 800; padding: 4px 9px; border-radius: 6px; min-width: 38px; text-align: center; }
+.ts-team-tx { display: flex; flex-direction: column; gap: 2px; }
+.ts-team-k { font-size: 10px; font-weight: 800; letter-spacing: .12em; color: #6B7488; }
+.ts-pen { font-size: 10px; color: #C2660C; font-weight: 700; }
+.ts-ratings { display: flex; gap: 8px; }
+.ts-rt { display: flex; flex-direction: column; align-items: center; min-width: 46px;
+  background: rgba(20,30,50,.035); border-radius: 8px; padding: 5px 8px; }
+.ts-rt-k { font-size: 9px; font-weight: 800; letter-spacing: .08em; color: #6B7488; }
+.ts-rt-v { font-family: var(--display-font); font-size: 19px; font-weight: 800; color: #1B2436; line-height: 1.05; }
+.ts-rt-ovr { background: rgba(181,128,15,.1); }
+.ts-rt-ovr .ts-rt-v { color: #B5800F; }
+.ts-proj { display: flex; gap: 16px; margin-left: auto; }
+.ts-pj { display: flex; flex-direction: column; align-items: center; }
+.ts-pj-v { font-family: var(--display-font); font-size: 18px; font-weight: 800; color: #1B2436; line-height: 1.1; }
+.ts-pj-gold { color: #B5800F; }
+.ts-pj-k { font-size: 9.5px; color: #6B7488; letter-spacing: .03em; }
+@media (max-width: 720px) { .ts-proj { margin-left: 0; width: 100%; justify-content: flex-start; } }
+
+/* post-loss "what went wrong" — a calm neutral card with a red accent edge, so
+   it reads as a distinct panel rather than merging with the red loss result. */
+.manal { background: #FFFFFF; border: 1px solid rgba(20,30,50,.1); border-left: 3px solid #D64349;
+  border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px;
+  box-shadow: 0 1px 6px -3px rgba(20,30,50,.1); }
+.manal-hd { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.manal-eye { font-size: 9.5px; font-weight: 800; letter-spacing: .14em; color: #D64349; }
+.manal-headline { font-family: var(--display-font); font-size: 16px; font-weight: 800; color: #1B2436; }
+.manal-ctx { font-size: 12px; color: #46526B; }
+.manal-factors { display: flex; flex-direction: column; gap: 5px; }
+.manal-f { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.manal-f-label { font-size: 10.5px; font-weight: 800; color: #C2660C; flex: none; min-width: 104px; }
+.manal-f-detail { font-size: 11.5px; color: #46526B; }
+.manal-phases { display: flex; flex-direction: column; gap: 3px; padding: 6px 0 0; border-top: 1px solid rgba(20,30,50,.07); }
+.manal-prow { display: flex; align-items: center; gap: 10px; font-size: 11px; color: #46526B; flex-wrap: wrap; }
+.manal-prow-k { font-size: 9px; font-weight: 800; letter-spacing: .06em; color: #6B7488; min-width: 78px; }
+.manal-ph b { color: #1B2436; font-weight: 800; }
+.manal-cta { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 2px; }
+.manal-cta-note { font-size: 11.5px; color: #46526B; }
+.manal-done { font-size: 11.5px; color: #12A06A; font-weight: 700; }
+
+/* pick-XI strength readout */
+.pxi-strength { display: flex; gap: 7px; }
+.pxi-st { font-size: 11px; color: #46526B; background: rgba(20,30,50,.04); border-radius: 6px; padding: 3px 8px; }
+.pxi-st b { color: #6B7488; font-weight: 800; font-size: 9.5px; letter-spacing: .04em; }
+.pxi-st-ovr { background: rgba(181,128,15,.1); color: #B5800F; }
+.pxi-st-ovr b { color: #B5800F; }
 
 /* playoffs bracket */
 .bracket { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
