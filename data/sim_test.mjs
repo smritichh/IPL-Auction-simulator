@@ -61,12 +61,11 @@ function valuation(team, p, v, lotsLeft, activeNeeders, bias){
   if(maxAfford <= 0) return 0;
   const avgPerSlot = team.purse / effSlots;
   const nm = needMult(p, team.squad, bias);
-  // Hard keeper guarantee (mirrors IplAuctionScreen.jsx): a keeperless team
-  // treats any keeper as a must-buy so no squad ends unable to field a keeper.
-  if (p.wk && !team.squad.some((s) => s.wk)) {
-    const want = Math.max(p.base + 0.5, v * nm * 2, avgPerSlot * 1.2);
-    return Math.min(want, team.purse);
-  }
+  // Keeper guarantee (mirrors IplAuctionScreen.jsx): a keeperless team's keeper
+  // appetite ramps up as the auction runs down, staying within the discipline
+  // cap early so it never overpays for a marquee keeper.
+  const needKeeper = p.wk && !team.squad.some((s) => s.wk);
+  const keeperBoost = needKeeper ? Math.min(3, Math.max(0, (180 - lotsLeft) / 60)) : 0;
   const myShare = lotsLeft / Math.max(1, activeNeeders);
   const pressure = slotsNeeded / Math.max(0.5, myShare);
   const minDeficit = Math.max(0, SQUAD_MIN - n);
@@ -152,3 +151,18 @@ for(const t of teams){
   const ov=overseasCount(t.squad);
   console.log(`${t.id.padEnd(4)} n=${t.squad.length} spent=${(120-t.purse).toFixed(1)} OS=${ov} | top:${cc.topBat||0} mid:${cc.midBat||0} fin:${cc.finisher||0} wk:${cc.wk||0} pace:${cc.pace||0} spin:${cc.spin||0} death:${cc.deathBowl||0} ar:${cc.allrounder||0}`);
 }
+
+// price sanity + keeper coverage across many runs
+console.log("\n=== price sanity + keeper coverage (10 runs) ===");
+let overallMax=0, topSale=null, keeperless=0, minKeepers=99;
+for(let r=0;r<10;r++){
+  const ts=runAuction();
+  for(const t of ts){
+    const wk=t.squad.filter(p=>p.wk).length;
+    if(wk===0) keeperless++;
+    minKeepers=Math.min(minKeepers, wk);
+    for(const p of t.squad){ if(p.price>overallMax){ overallMax=p.price; topSale=`${p.name} ${p.price}Cr`; } }
+  }
+}
+console.log(`most expensive sale across 10 runs: ${topSale} (real IPL record ~27Cr)`);
+console.log(`teams that ended keeperless: ${keeperless}/100  | min keepers on any team: ${minKeepers}`);

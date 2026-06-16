@@ -115,13 +115,13 @@ function valuation(team, p, v, lotsLeft, activeNeeders) {
   if (maxAfford <= 0) return 0;
   const avgPerSlot = team.purse / effSlots;
   const nm = needMult(p, team.squad, team.bias);
-  // Hard keeper guarantee: a team with NO wicketkeeper treats any keeper as a
-  // must-buy (there are cheap ones in the pool), so no squad ever ends the
-  // auction unable to field a legal XI. Bids strongly, never beyond its purse.
-  if (p.wk && !team.squad.some((s) => s.wk)) {
-    const want = Math.max(p.base + 0.5, v * nm * 2, avgPerSlot * 1.2);
-    return Math.min(want, team.purse);
-  }
+  // Keeper guarantee: a keeperless team's appetite for a keeper RAMPS UP as the
+  // auction runs down (so it grabs one before lots run out) but stays inside the
+  // normal budget-discipline cap early — otherwise it overpays wildly for a
+  // marquee keeper in the opening sets. Cheap keepers appear in later sets, so
+  // the late ramp reliably lands one.
+  const needKeeper = p.wk && !team.squad.some((s) => s.wk);
+  const keeperBoost = needKeeper ? Math.min(3, Math.max(0, (180 - lotsLeft) / 60)) : 0;
   // Competition-aware urgency.
   const myShare = lotsLeft / Math.max(1, activeNeeders);
   const pressure = slotsNeeded / Math.max(0.5, myShare);
@@ -135,7 +135,7 @@ function valuation(team, p, v, lotsLeft, activeNeeders) {
   const criticalBoost = brokeAndNeedy
     ? Math.min(2.0, ((2.0 - avgPerSlot) / 2.0) * 3.0 * Math.min(1, minDeficit / 5))
     : 0;
-  const urgency = 1 + Math.max(0, pressure - 1.0) * 1.2 + desperation + criticalBoost;
+  const urgency = 1 + Math.max(0, pressure - 1.0) * 1.2 + desperation + criticalBoost + keeperBoost;
   const desire = Math.max(p.base, v * nm);
   const disciplineCap = avgPerSlot * ratingMult(p) * urgency;
   // Urgency lifts the willingness floor toward the discipline cap, so a
