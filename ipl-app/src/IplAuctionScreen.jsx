@@ -802,10 +802,15 @@ export default function IplAuctionScreen() {
                     )}
                   </div>
 
-                  {/* Skip the rest of this set — autopilot to the next set */}
+                  {/* Skip the rest of this set — disabled while you're winning a lot */}
                   {(game.phase === "bidding" || game.phase === "sold") && (
-                    <button className="ff-btn" onClick={skipSet}>
-                      ⏩ Skip rest of this set
+                    <button
+                      className="ff-btn"
+                      onClick={skipSet}
+                      disabled={game.leader === game.userTeamId}
+                      title={game.leader === game.userTeamId ? "You're the top bid — let this lot finish first" : undefined}
+                    >
+                      {game.leader === game.userTeamId ? "Winning this lot…" : "⏩ Skip rest of this set"}
                     </button>
                   )}
 
@@ -2599,7 +2604,8 @@ const styles = `
   border-radius: 9px; cursor: pointer; padding: 8px 10px;
   transition: background .15s;
 }
-.ff-btn:hover { background: rgba(245,196,81,.18); }
+.ff-btn:hover:not(:disabled) { background: rgba(245,196,81,.18); }
+.ff-btn:disabled { background: rgba(20,30,50,.04); border-color: rgba(20,30,50,.12); color: #8089A0; cursor: not-allowed; }
 
 /* purse depletion bar on team cards */
 .tc-bar {
