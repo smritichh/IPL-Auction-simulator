@@ -1,3 +1,4 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { background: #070A14; }
-#root { min-height: 100vh; padding: 24px; }
+html, body { min-height: 100%; }
+body { background: #E8ECF3; }
+#root { min-height: 100vh; }

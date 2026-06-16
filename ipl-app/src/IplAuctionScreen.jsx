@@ -2073,11 +2073,12 @@ const styles = `
     radial-gradient(900px 400px at 30% 0%, rgba(245,196,81,.12), transparent 55%),
     radial-gradient(600px 500px at 100% 0%, rgba(27,111,203,.07), transparent 50%),
     linear-gradient(180deg, #EDF0F6, #DEE4EF 70%);
-  border-radius: 16px;
-  padding: 12px 16px 12px;
+  background-attachment: fixed;
+  border-radius: 0;
+  padding: 14px 22px 18px;
   font-variant-numeric: tabular-nums;
   overflow: hidden;
-  min-height: 600px;
+  min-height: 100vh;
 }
 .auc * { box-sizing: border-box; }
 
@@ -2147,7 +2148,7 @@ const styles = `
 .empty-hint  { font-size: 12px; color: #6B7488; line-height: 1.5; margin: 0; }
 
 /* ── CENTER ── */
-.center { display: flex; flex-direction: column; gap: 9px; }
+.center { display: flex; flex-direction: column; gap: 14px; }
 
 /* player stage */
 .stage {
@@ -2292,14 +2293,14 @@ const styles = `
 .teams-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 7px;
+  gap: 11px;
 }
 
 /* team card */
-.tc-wrap { position: relative; padding-top: 18px; }
+.tc-wrap { position: relative; padding-top: 22px; }
 .tc {
   background: #FFFFFF; border: 1px solid rgba(20,30,50,.1);
-  border-radius: 11px; padding: 7px 10px;
+  border-radius: 11px; padding: 11px 13px;
   box-shadow: 0 1px 6px -3px rgba(20,30,50,.12);
   transition: box-shadow .2s, border-color .2s, background .2s;
 }
