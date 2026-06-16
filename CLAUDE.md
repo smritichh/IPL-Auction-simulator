@@ -29,7 +29,12 @@ is supporting material.
   the file you edit for almost everything.
 - `ipl-app/src/matchEngine.js` — pure ES module. `pickXI` (overseas ≤4 in XI,
   ≥5 bowling options, 1 keeper), `battingOrder`, phase-based ball-by-ball T20
-  `simulateMatch` (returns full scorecard + per-over/per-ball `timeline`), `innViews`.
+  `simulateMatch` (returns full scorecard + per-over/per-ball `timeline`),
+  `innViews`, and `teamStrength(xi)` → `{batting, bowling, overall}` (0–100, with
+  balance penalties; `overall` is the projection's strength input).
+- `ipl-app/src/matchDiagnostics.js` — pure ES module. `analyzeMatch(match, userId)`
+  turns the phase-tagged timeline into a plain-English "what went wrong" read
+  (top-order collapse, death-bowling leak, star let-down…) for the post-loss card.
 - `ipl-app/src/season.js` — pure ES module. 14-game schedule (circle method),
   points table + NRR, standings.
 - `ipl-app/src/players.js` — **GENERATED, never hand-edit.** 258 real IPL players
@@ -100,16 +105,26 @@ A team's max bid = squad-need × rating × budget-discipline, with these guards:
   Light theme: dark ink on white cards, gold `#B5800F` accents, team brand colours.
 - The auction runs over `game.order` (an array of player indices), so unsold
   re-auction can append to it. Address lots via `lotPlayer(g, i)`, never `PLAYERS[i]`.
-- Pick XI hard-requires 1 keeper (unless the squad genuinely has none → a batter
-  keeps) and ≥5 bowling options.
+- Pick XI hard-requires 1 keeper and ≥5 bowling options — **unless the squad
+  genuinely can't field them** (no keeper → a batter keeps; <5 bowling options in
+  the whole squad → the block relaxes to a warning, never a soft-lock). The auction
+  valuation has matching keeper- and bowling-guarantee ramps so this is rare.
 - `.claude/settings.local.json` is intentionally **untracked** (local tooling state).
 
 ## Current state
 
-Full loop is playable and committed on `main` (no remote yet): team pick →
-auction → Pick XI (drag-drop + auto-pick) → 14-game league → playoffs (only your
-own knockouts play over-by-over; others auto-sim) → **finish screen** showing your
-final position, projected-vs-actual, title odds, best/worst buy, and a shareable
-PNG. Light full-bleed theme.
+Full loop is playable, committed on `main`, **pushed to GitHub
+(`smritichh/IPL-Auction-simulator`) and auto-deployed on Vercel** (root dir
+`ipl-app`): team pick → auction → Pick XI (drag-drop + auto-pick, with a live
+BAT/BOWL/OVERALL strength readout) → 14-game league → playoffs (only your own
+knockouts play over-by-over; others auto-sim) → **finish screen** (final position,
+projected-vs-actual, title odds, best/worst buy, shareable PNG). Light full-bleed theme.
+
+The league screen has a **persistent team strip** (your strength + a live probable
+finish re-projected each match-day) and, **after a loss**, a "what went wrong"
+analysis card with an **"Adjust your XI"** button — a mid-season re-pick that swaps
+your XI for the remaining matches (`updateXI` in `SeasonScreen`; the season is
+simulated lazily so only future rounds use the new XI). Pre-match win/preview
+interstitials were deliberately skipped in favour of the always-on strip.
 
 The original product brief is in `ipl-auction-sim-brief.md`.
