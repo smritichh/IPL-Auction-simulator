@@ -614,7 +614,7 @@ export default function IplAuctionScreen() {
   const ringColor  = frac < 0.3 ? "#DC3A40" : game.leader === game.userTeamId ? "#12A06A" : "#B5800F";
   const leaderTeam = game.leader ? TEAMS.find((t) => t.id === game.leader) : null;
   const canAfford  = me.purse >= game.asking;
-  const R = 40, C = 2 * Math.PI * R;
+  const R = 30, C = 2 * Math.PI * R;
 
   return (
     <div className="auc">
@@ -711,6 +711,8 @@ export default function IplAuctionScreen() {
                 <span className="set-strip-pos">{setPos} of {setLots.length} in set</span>
               </div>
 
+              <div className="stage-body">
+                <div className="stage-info">
               <div className="stage-eyebrow">
                 <span>LOT {String(game.index + 1).padStart(2, "0")} / {String(game.order.length).padStart(2, "0")}</span>
                 <span className="tier-pill">{tierLabel(p.tier)}</span>
@@ -744,18 +746,19 @@ export default function IplAuctionScreen() {
               ) : (
                 <div className="need-chip need-no">Position covered — you're set here</div>
               )}
+                </div>
 
-              <div className="stage-main">
-                <div className="stage-left">
+                <div className="bid-console">
+                <div className="stage-bid">
                   {/* Timer ring */}
                   <div className="ring-wrap">
-                    <svg width="92" height="92" viewBox="0 0 92 92">
-                      <circle cx="46" cy="46" r={R} stroke="rgba(20,30,50,.08)" strokeWidth="6" fill="none" />
+                    <svg width="72" height="72" viewBox="0 0 72 72">
+                      <circle cx="36" cy="36" r={R} stroke="rgba(20,30,50,.08)" strokeWidth="5" fill="none" />
                       <circle
-                        cx="46" cy="46" r={R} stroke={ringColor} strokeWidth="6" fill="none"
+                        cx="36" cy="36" r={R} stroke={ringColor} strokeWidth="5" fill="none"
                         strokeLinecap="round" strokeDasharray={C}
                         strokeDashoffset={C * (1 - frac)}
-                        transform="rotate(-90 46 46)"
+                        transform="rotate(-90 36 36)"
                         style={{ transition: "stroke-dashoffset .25s linear, stroke .3s" }}
                       />
                     </svg>
@@ -810,21 +813,9 @@ export default function IplAuctionScreen() {
                     )}
                   </div>
 
-                  {/* Skip the rest of this set — disabled while you're winning a lot */}
-                  {(game.phase === "bidding" || game.phase === "sold") && (
-                    <button
-                      className="ff-btn"
-                      onClick={skipSet}
-                      disabled={game.leader === game.userTeamId}
-                      title={game.leader === game.userTeamId ? "You're the top bid — let this lot finish first" : undefined}
-                    >
-                      {game.leader === game.userTeamId ? "Winning this lot…" : "⏩ Skip rest of this set"}
-                    </button>
-                  )}
-
-                  {/* Autopilot — let AI finish the auction for MI */}
-                  <div className="ap-wrap">
-                    {apConfirm ? (
+                  {/* Secondary actions — Skip-set + Autopilot side by side */}
+                  {apConfirm ? (
+                    <div className="ap-wrap">
                       <div className="ap-confirm">
                         <span className="ap-confirm-txt">AI fills your squad?</span>
                         <div className="ap-confirm-btns">
@@ -832,12 +823,23 @@ export default function IplAuctionScreen() {
                           <button className="ap-no"  onClick={() => showApConfirm(false)}>Cancel</button>
                         </div>
                       </div>
-                    ) : (
-                      <button className="ap-btn" onClick={() => showApConfirm(true)}>
-                        ⚡ Autopilot — fill my squad
-                      </button>
-                    )}
-                  </div>
+                    </div>
+                  ) : (
+                    <div className="pod-secondary">
+                      {(game.phase === "bidding" || game.phase === "sold") && (
+                        <button
+                          className="ff-btn"
+                          onClick={skipSet}
+                          disabled={game.leader === game.userTeamId}
+                          title={game.leader === game.userTeamId ? "You're the top bid — let this lot finish first" : "Autopilot the rest of this set"}
+                        >
+                          {game.leader === game.userTeamId ? "Winning…" : "⏩ Skip set"}
+                        </button>
+                      )}
+                      <button className="ap-btn" onClick={() => showApConfirm(true)}>⚡ Autopilot</button>
+                    </div>
+                  )}
+                </div>
                 </div>
               </div>
 
@@ -2072,7 +2074,7 @@ const styles = `
     radial-gradient(600px 500px at 100% 0%, rgba(27,111,203,.07), transparent 50%),
     linear-gradient(180deg, #EDF0F6, #DEE4EF 70%);
   border-radius: 16px;
-  padding: 16px 18px 20px;
+  padding: 12px 16px 12px;
   font-variant-numeric: tabular-nums;
   overflow: hidden;
   min-height: 600px;
@@ -2083,7 +2085,7 @@ const styles = `
 .hd {
   display: flex; justify-content: space-between; align-items: center;
   gap: 12px; flex-wrap: wrap;
-  padding-bottom: 13px; margin-bottom: 14px;
+  padding-bottom: 10px; margin-bottom: 10px;
   border-bottom: 1px solid rgba(20,30,50,.07);
 }
 .hd-brand  { display: flex; align-items: center; gap: 10px; }
@@ -2112,7 +2114,7 @@ const styles = `
 /* body grid — matches the sketch exactly */
 .body {
   display: grid;
-  grid-template-columns: 172px 1fr 196px;
+  grid-template-columns: 162px 1fr 216px;
   gap: 12px;
   align-items: start;
 }
@@ -2123,8 +2125,8 @@ const styles = `
   background: #FFFFFF;
   border: 1px solid rgba(20,30,50,.1);
   border-radius: 13px;
-  padding: 13px 13px;
-  min-height: 400px;
+  padding: 12px 12px;
+  min-height: 260px;
   box-shadow: 0 2px 10px -4px rgba(20,30,50,.12);
 }
 .panel-title {
@@ -2145,7 +2147,7 @@ const styles = `
 .empty-hint  { font-size: 12px; color: #6B7488; line-height: 1.5; margin: 0; }
 
 /* ── CENTER ── */
-.center { display: flex; flex-direction: column; gap: 12px; }
+.center { display: flex; flex-direction: column; gap: 9px; }
 
 /* player stage */
 .stage {
@@ -2153,7 +2155,7 @@ const styles = `
   background: #FFFFFF;
   border: 1px solid rgba(20,30,50,.1);
   border-radius: 15px;
-  padding: 18px 20px;
+  padding: 14px 18px;
   overflow: hidden;
   box-shadow: 0 18px 44px -20px rgba(20,30,50,.3), 0 0 60px -22px rgba(245,196,81,.22);
 }
@@ -2172,27 +2174,27 @@ const styles = `
 }
 .stage-name {
   font-family: var(--display-font);
-  font-size: clamp(34px, 4.6vw, 52px); font-weight: 800;
+  font-size: clamp(28px, 3.4vw, 40px); font-weight: 800;
   letter-spacing: .01em; text-transform: uppercase;
-  margin: 8px 0 0; line-height: 1;
+  margin: 5px 0 0; line-height: 1;
 }
-.stage-chips { display: flex; gap: 7px; margin-top: 9px; flex-wrap: wrap; }
+.stage-chips { display: flex; gap: 6px; margin-top: 7px; flex-wrap: wrap; }
 .chip {
   font-size: 11.5px; background: rgba(20,30,50,.06);
   border: 1px solid rgba(20,30,50,.08); padding: 3px 10px;
   border-radius: 99px; color: #46526B;
 }
-.stage-main {
-  display: flex; align-items: center; justify-content: space-between; gap: 18px;
-  margin-top: 14px; flex-wrap: wrap;
-}
-.stage-left { display: flex; align-items: center; gap: 20px; flex: 1 1 auto; min-width: 240px; }
-.ring-wrap  { position: relative; width: 92px; height: 92px; flex: none; }
+.stage-body { display: flex; align-items: flex-start; gap: 20px; margin-top: 8px; }
+.stage-info { flex: 1 1 auto; min-width: 0; }
+.bid-console { flex: 0 0 auto; width: 286px; display: flex; flex-direction: column; gap: 11px; }
+.stage-bid  { display: flex; align-items: center; gap: 16px; }
+@media (max-width: 820px) { .stage-body { flex-direction: column; } .bid-console { width: 100%; } }
+.ring-wrap  { position: relative; width: 72px; height: 72px; flex: none; }
 .ring-inner {
   position: absolute; inset: 0;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
 }
-.ring-init  { font-weight: 850; font-size: 19px; }
+.ring-init  { font-weight: 850; font-size: 15px; }
 .ring-secs  { font-size: 10.5px; font-weight: 700; margin-top: 1px; }
 .bid-block  { flex: 0 1 auto; min-width: 130px; }
 .bid-lbl    { font-size: 10px; letter-spacing: .15em; color: #677087; font-weight: 700; }
@@ -2203,10 +2205,10 @@ const styles = `
 .bid-base   { margin-top: 6px; font-size: 10.5px; color: #6B7488; }
 /* user bidding pod (right of stage) */
 .user-pod {
-  flex: 0 0 auto; width: 210px;
+  width: 100%;
   background: linear-gradient(155deg, rgba(27,111,203,.18), rgba(27,111,203,.04));
   border: 1px solid rgba(27,111,203,.42); border-radius: 13px;
-  padding: 12px; display: flex; flex-direction: column; gap: 11px;
+  padding: 10px 11px; display: flex; flex-direction: column; gap: 8px;
 }
 .user-pod-head { display: flex; align-items: center; gap: 10px; }
 .user-pod-badge {
@@ -2216,12 +2218,16 @@ const styles = `
 }
 .user-pod-name  { font-size: 14px; font-weight: 800; color: #1B2436; line-height: 1.1; }
 .user-pod-purse { font-size: 11px; font-weight: 600; color: #2E6FB0; margin-top: 2px; }
-.controls   { display: flex; flex-direction: column; gap: 7px; }
-.controls .bid-btn { justify-content: center; width: 100%; }
-.controls .out-btn { width: 100%; text-align: center; }
+.controls   { display: flex; gap: 7px; }
+.controls .bid-btn { justify-content: center; flex: 2 1 auto; }
+.controls .out-btn { flex: 1 1 auto; text-align: center; }
+.controls .leading-tag, .controls .passed-tag { flex: 1 1 auto; }
 
 /* autopilot */
-.ap-wrap { margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(20,30,50,.07); }
+.ap-wrap { margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(20,30,50,.07); }
+.pod-secondary { display: flex; gap: 7px; margin-top: 2px; }
+.pod-secondary .ff-btn { margin-top: 0; flex: 1 1 auto; }
+.pod-secondary .ap-btn { flex: 1 1 auto; }
 .ap-btn {
   width: 100%; background: rgba(20,30,50,.05);
   border: 1px solid rgba(20,30,50,.12); color: #55617A;
@@ -2286,28 +2292,28 @@ const styles = `
 .teams-section {}
 .section-label {
   font-size: 10px; font-weight: 700; letter-spacing: .14em;
-  color: #677087; text-transform: uppercase; margin-bottom: 9px;
+  color: #677087; text-transform: uppercase; margin-bottom: 6px;
 }
 .teams-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
+  gap: 7px;
 }
 
 /* team card */
-.tc-wrap { position: relative; padding-top: 34px; }
+.tc-wrap { position: relative; padding-top: 18px; }
 .tc {
   background: #FFFFFF; border: 1px solid rgba(20,30,50,.1);
-  border-radius: 12px; padding: 12px 14px;
+  border-radius: 11px; padding: 7px 10px;
   box-shadow: 0 1px 6px -3px rgba(20,30,50,.12);
   transition: box-shadow .2s, border-color .2s, background .2s;
 }
 .tc:hover { box-shadow: 0 4px 14px -5px rgba(20,30,50,.2); }
 .tc-lead { background: #FFFFFF; }
-.tc-head  { display: flex; align-items: center; gap: 11px; }
+.tc-head  { display: flex; align-items: center; gap: 9px; }
 .tc-badge {
-  width: 40px; height: 40px; border-radius: 9px;
-  display: grid; place-items: center; font-weight: 800; font-size: 11px;
+  width: 34px; height: 34px; border-radius: 8px;
+  display: grid; place-items: center; font-weight: 800; font-size: 10.5px;
   flex: none; letter-spacing: .01em;
 }
 .tc-info  { min-width: 0; flex: 1; }
@@ -2578,8 +2584,8 @@ const styles = `
 
 /* real-stat strip */
 .stat-strip {
-  display: flex; gap: 18px; margin: 10px 0 8px;
-  padding: 10px 14px; background: rgba(20,30,50,.03);
+  display: flex; gap: 16px; margin: 7px 0 4px;
+  padding: 8px 12px; background: rgba(20,30,50,.03);
   border: 1px solid rgba(20,30,50,.07); border-radius: 10px;
   width: fit-content;
 }
@@ -2590,7 +2596,7 @@ const styles = `
 
 /* squad-need chip */
 .need-chip {
-  display: inline-block; margin-bottom: 8px;
+  display: inline-block; margin-bottom: 0;
   font-size: 11px; font-weight: 700; letter-spacing: .04em;
   padding: 5px 11px; border-radius: 7px; border: 1px solid;
 }
@@ -2606,7 +2612,7 @@ const styles = `
 
 /* fast-forward button */
 .ff-btn {
-  width: 100%; margin-top: 8px; min-height: 38px;
+  width: 100%; margin-top: 6px; min-height: 32px;
   background: rgba(245,196,81,.1); border: 1px solid rgba(245,196,81,.35);
   color: #B5800F; font-size: 12px; font-weight: 700;
   border-radius: 9px; cursor: pointer; padding: 8px 10px;
