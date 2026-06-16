@@ -137,10 +137,18 @@ function valuation(team, p, v, lotsLeft, activeNeeders) {
     : 0;
   const urgency = 1 + Math.max(0, pressure - 1.0) * 1.2 + desperation + criticalBoost + keeperBoost;
   const desire = Math.max(p.base, v * nm);
-  const disciplineCap = avgPerSlot * ratingMult(p) * urgency;
-  // Urgency lifts the willingness floor toward the discipline cap, so a
+  // Budget discipline sets the baseline ceiling (warCap). Premium players (80+)
+  // ADDITIONALLY draw bidding wars that push toward their per-game, hunger-noised
+  // market value (demandCap), so the same star fetches a different price every
+  // game and rival teams value them differently — instead of a flat number.
+  // Sub-80 players are unchanged (starW = 0), preserving the filler tuning.
+  const warCap    = avgPerSlot * ratingMult(p) * urgency;
+  const starW     = Math.max(0, Math.min(1, (p.rating - 80) / 15));   // 0 below 80 … 1 at 95+
+  const demandCap = Math.min(v * 1.05, team.purse * 0.4);              // demand-driven, bounded
+  const disciplineCap = warCap + starW * Math.max(0, demandCap - warCap);
+  // Urgency lifts the willingness floor toward the disciplined cap so a
   // low-aggression / broke team still competes for fillers.
-  const floorWill = Math.max(0, urgency - 1) * disciplineCap;
+  const floorWill = Math.max(0, urgency - 1) * warCap;
   return Math.min(Math.max(desire, floorWill), disciplineCap, maxAfford, team.purse) * glut;
 }
 

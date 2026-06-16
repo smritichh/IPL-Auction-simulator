@@ -76,11 +76,13 @@ function valuation(team, p, v, lotsLeft, activeNeeders, bias){
     : 0;
   const urgency = 1 + Math.max(0, pressure - 1.0)*1.2 + desperation + criticalBoost;
   const desire = Math.max(p.base, v*nm);
-  const disciplineCap = avgPerSlot * ratingMult(p) * urgency;
-  // urgency lifts the willingness floor toward the budget-discipline cap, so a
-  // low-aggression team that's falling behind still competes for fillers
-  // instead of being permanently capped by its market desire.
-  const floorWill = Math.max(0, urgency - 1) * disciplineCap;
+  // Premium players (80+) draw bidding wars toward their per-game market value
+  // (mirrors IplAuctionScreen.jsx) so stars vary in price; sub-80 unchanged.
+  const warCap    = avgPerSlot * ratingMult(p) * urgency;
+  const starW     = Math.max(0, Math.min(1, (p.rating - 80) / 15));
+  const demandCap = Math.min(v * 1.05, team.purse * 0.4);
+  const disciplineCap = warCap + starW * Math.max(0, demandCap - warCap);
+  const floorWill = Math.max(0, urgency - 1) * warCap;
   return Math.min(Math.max(desire, floorWill), disciplineCap, maxAfford, team.purse) * glut;
 }
 
@@ -166,3 +168,18 @@ for(let r=0;r<10;r++){
 }
 console.log(`most expensive sale across 10 runs: ${topSale} (real IPL record ~27Cr)`);
 console.log(`teams that ended keeperless: ${keeperless}/100  | min keepers on any team: ${minKeepers}`);
+
+// price variance for a few marquee names across 30 runs
+console.log("\n=== marquee price spread (30 runs, AI-only) ===");
+const watch = ["Virat Kohli","Jasprit Bumrah","Travis Head","Heinrich Klaasen"];
+const seen = Object.fromEntries(watch.map(n=>[n,[]]));
+for(let r=0;r<30;r++){
+  const ts=runAuction();
+  for(const t of ts) for(const p of t.squad) if(seen[p.name]) seen[p.name].push(p.price);
+}
+for(const n of watch){
+  const a=seen[n].sort((x,y)=>x-y);
+  if(!a.length){ console.log(`${n}: never sold?!`); continue; }
+  const min=a[0], max=a[a.length-1], med=a[Math.floor(a.length/2)];
+  console.log(`${n.padEnd(18)} sold ${a.length}x | min ${min} med ${med} max ${max} | all: ${a.join(",")}`);
+}
