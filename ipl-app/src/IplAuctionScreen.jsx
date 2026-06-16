@@ -746,9 +746,7 @@ export default function IplAuctionScreen() {
               ) : (
                 <div className="need-chip need-no">Position covered — you're set here</div>
               )}
-                </div>
 
-                <div className="bid-console">
                 <div className="stage-bid">
                   {/* Timer ring */}
                   <div className="ring-wrap">
@@ -786,6 +784,7 @@ export default function IplAuctionScreen() {
                     <div className="bid-base">base price {cr(p.base)}</div>
                   </div>
                 </div>
+                </div>
 
                 {/* YOUR bidding pod — team identity + controls */}
                 <div className="user-pod" style={{ borderColor: `${myTeamDef.color}55` }}>
@@ -813,9 +812,21 @@ export default function IplAuctionScreen() {
                     )}
                   </div>
 
-                  {/* Secondary actions — Skip-set + Autopilot side by side */}
-                  {apConfirm ? (
-                    <div className="ap-wrap">
+                  {/* Skip the rest of this set — disabled while you're winning a lot */}
+                  {(game.phase === "bidding" || game.phase === "sold") && (
+                    <button
+                      className="ff-btn"
+                      onClick={skipSet}
+                      disabled={game.leader === game.userTeamId}
+                      title={game.leader === game.userTeamId ? "You're the top bid — let this lot finish first" : "Autopilot the rest of this set"}
+                    >
+                      {game.leader === game.userTeamId ? "Winning this lot…" : "⏩ Skip rest of this set"}
+                    </button>
+                  )}
+
+                  {/* Autopilot — let AI finish the auction */}
+                  <div className="ap-wrap">
+                    {apConfirm ? (
                       <div className="ap-confirm">
                         <span className="ap-confirm-txt">AI fills your squad?</span>
                         <div className="ap-confirm-btns">
@@ -823,23 +834,12 @@ export default function IplAuctionScreen() {
                           <button className="ap-no"  onClick={() => showApConfirm(false)}>Cancel</button>
                         </div>
                       </div>
-                    </div>
-                  ) : (
-                    <div className="pod-secondary">
-                      {(game.phase === "bidding" || game.phase === "sold") && (
-                        <button
-                          className="ff-btn"
-                          onClick={skipSet}
-                          disabled={game.leader === game.userTeamId}
-                          title={game.leader === game.userTeamId ? "You're the top bid — let this lot finish first" : "Autopilot the rest of this set"}
-                        >
-                          {game.leader === game.userTeamId ? "Winning…" : "⏩ Skip set"}
-                        </button>
-                      )}
-                      <button className="ap-btn" onClick={() => showApConfirm(true)}>⚡ Autopilot</button>
-                    </div>
-                  )}
-                </div>
+                    ) : (
+                      <button className="ap-btn" onClick={() => showApConfirm(true)}>
+                        ⚡ Autopilot — fill my squad
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -2186,9 +2186,8 @@ const styles = `
 }
 .stage-body { display: flex; align-items: flex-start; gap: 20px; margin-top: 8px; }
 .stage-info { flex: 1 1 auto; min-width: 0; }
-.bid-console { flex: 0 0 auto; width: 286px; display: flex; flex-direction: column; gap: 11px; }
-.stage-bid  { display: flex; align-items: center; gap: 16px; }
-@media (max-width: 820px) { .stage-body { flex-direction: column; } .bid-console { width: 100%; } }
+.stage-bid  { display: flex; align-items: center; gap: 18px; margin-top: 12px; }
+@media (max-width: 820px) { .stage-body { flex-direction: column; } }
 .ring-wrap  { position: relative; width: 72px; height: 72px; flex: none; }
 .ring-inner {
   position: absolute; inset: 0;
@@ -2205,10 +2204,10 @@ const styles = `
 .bid-base   { margin-top: 6px; font-size: 10.5px; color: #6B7488; }
 /* user bidding pod (right of stage) */
 .user-pod {
-  width: 100%;
+  flex: 0 0 auto; width: 222px;
   background: linear-gradient(155deg, rgba(27,111,203,.18), rgba(27,111,203,.04));
   border: 1px solid rgba(27,111,203,.42); border-radius: 13px;
-  padding: 10px 11px; display: flex; flex-direction: column; gap: 8px;
+  padding: 11px; display: flex; flex-direction: column; gap: 9px;
 }
 .user-pod-head { display: flex; align-items: center; gap: 10px; }
 .user-pod-badge {
@@ -2218,16 +2217,12 @@ const styles = `
 }
 .user-pod-name  { font-size: 14px; font-weight: 800; color: #1B2436; line-height: 1.1; }
 .user-pod-purse { font-size: 11px; font-weight: 600; color: #2E6FB0; margin-top: 2px; }
-.controls   { display: flex; gap: 7px; }
-.controls .bid-btn { justify-content: center; flex: 2 1 auto; }
-.controls .out-btn { flex: 1 1 auto; text-align: center; }
-.controls .leading-tag, .controls .passed-tag { flex: 1 1 auto; }
+.controls   { display: flex; flex-direction: column; gap: 7px; }
+.controls .bid-btn { justify-content: center; width: 100%; }
+.controls .out-btn { width: 100%; text-align: center; }
 
 /* autopilot */
-.ap-wrap { margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(20,30,50,.07); }
-.pod-secondary { display: flex; gap: 7px; margin-top: 2px; }
-.pod-secondary .ff-btn { margin-top: 0; flex: 1 1 auto; }
-.pod-secondary .ap-btn { flex: 1 1 auto; }
+.ap-wrap { margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(20,30,50,.07); }
 .ap-btn {
   width: 100%; background: rgba(20,30,50,.05);
   border: 1px solid rgba(20,30,50,.12); color: #55617A;
