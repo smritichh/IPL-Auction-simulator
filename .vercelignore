@@ -1,0 +1,7 @@
+# Only ipl-app is built (project Root Directory = ipl-app). Keep CLI uploads lean.
+# NOTE: patterns are ANCHORED with a leading slash so they only match at the repo
+# root — a bare "IplAuctionScreen.jsx" would also exclude ipl-app/src/IplAuctionScreen.jsx.
+/data
+/.design-audit
+/.gstack
+/IplAuctionScreen.jsx
