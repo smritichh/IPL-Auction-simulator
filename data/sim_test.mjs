@@ -66,6 +66,15 @@ function valuation(team, p, v, lotsLeft, activeNeeders, bias){
   // cap early so it never overpays for a marquee keeper.
   const needKeeper = p.wk && !team.squad.some((s) => s.wk);
   const keeperBoost = needKeeper ? Math.min(3, Math.max(0, (180 - lotsLeft) / 60)) : 0;
+  // Bowling-options guarantee (mirrors IplAuctionScreen.jsx): a team short of 5
+  // bowling options (specialist bowlers + all-rounders) ramps up appetite for
+  // them as lots run down, scaled by the deficit.
+  const isBowlOption = p.role === "Bowler" || p.role === "All-rounder";
+  const bowlHave = team.squad.reduce((a, s) => a + (s.role === "Bowler" || s.role === "All-rounder" ? 1 : 0), 0);
+  const bowlDeficit = Math.max(0, 5 - bowlHave);
+  const bowlBoost = isBowlOption && bowlDeficit > 0
+    ? Math.min(3, Math.max(0, (180 - lotsLeft) / 60)) * Math.min(1, bowlDeficit / 2)
+    : 0;
   const myShare = lotsLeft / Math.max(1, activeNeeders);
   const pressure = slotsNeeded / Math.max(0.5, myShare);
   const minDeficit = Math.max(0, SQUAD_MIN - n);
@@ -74,7 +83,7 @@ function valuation(team, p, v, lotsLeft, activeNeeders, bias){
   const criticalBoost = brokeAndNeedy
     ? Math.min(2.0, ((2.0 - avgPerSlot) / 2.0) * 3.0 * Math.min(1, minDeficit / 5))
     : 0;
-  const urgency = 1 + Math.max(0, pressure - 1.0)*1.2 + desperation + criticalBoost;
+  const urgency = 1 + Math.max(0, pressure - 1.0)*1.2 + desperation + criticalBoost + keeperBoost + bowlBoost;
   const desire = Math.max(p.base, v*nm);
   // Premium players (80+) draw bidding wars toward their per-game market value
   // (mirrors IplAuctionScreen.jsx) so stars vary in price; sub-80 unchanged.
@@ -156,18 +165,22 @@ for(const t of teams){
 
 // price sanity + keeper coverage across many runs
 console.log("\n=== price sanity + keeper coverage (10 runs) ===");
-let overallMax=0, topSale=null, keeperless=0, minKeepers=99;
+let overallMax=0, topSale=null, keeperless=0, minKeepers=99, underBowled=0, minBowlOpts=99;
 for(let r=0;r<10;r++){
   const ts=runAuction();
   for(const t of ts){
     const wk=t.squad.filter(p=>p.wk).length;
     if(wk===0) keeperless++;
     minKeepers=Math.min(minKeepers, wk);
+    const bowlOpts=t.squad.filter(p=>p.role==="Bowler"||p.role==="All-rounder").length;
+    if(bowlOpts<5) underBowled++;
+    minBowlOpts=Math.min(minBowlOpts, bowlOpts);
     for(const p of t.squad){ if(p.price>overallMax){ overallMax=p.price; topSale=`${p.name} ${p.price}Cr`; } }
   }
 }
 console.log(`most expensive sale across 10 runs: ${topSale} (real IPL record ~27Cr)`);
 console.log(`teams that ended keeperless: ${keeperless}/100  | min keepers on any team: ${minKeepers}`);
+console.log(`teams with <5 bowling options: ${underBowled}/100  | min bowling options on any team: ${minBowlOpts} (Pick XI needs 5)`);
 
 // price variance for a few marquee names across 30 runs
 console.log("\n=== marquee price spread (30 runs, AI-only) ===");

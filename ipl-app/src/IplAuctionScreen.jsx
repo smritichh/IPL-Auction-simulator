@@ -122,6 +122,18 @@ function valuation(team, p, v, lotsLeft, activeNeeders) {
   // the late ramp reliably lands one.
   const needKeeper = p.wk && !team.squad.some((s) => s.wk);
   const keeperBoost = needKeeper ? Math.min(3, Math.max(0, (180 - lotsLeft) / 60)) : 0;
+  // Bowling-options guarantee (mirrors the keeper ramp): Pick XI needs >=5
+  // bowling options (specialist bowlers + all-rounders). A team short of them
+  // ramps up appetite for bowlers/all-rounders as lots run down, scaled by the
+  // deficit — so a squad that over-invested in batting (e.g. a human who blew
+  // the purse on 8 batting stars) still secures enough bowling to field a legal
+  // XI, without overpaying for bowlers early.
+  const isBowlOption = p.role === "Bowler" || p.role === "All-rounder";
+  const bowlHave = team.squad.reduce((a, s) => a + (s.role === "Bowler" || s.role === "All-rounder" ? 1 : 0), 0);
+  const bowlDeficit = Math.max(0, 5 - bowlHave);
+  const bowlBoost = isBowlOption && bowlDeficit > 0
+    ? Math.min(3, Math.max(0, (180 - lotsLeft) / 60)) * Math.min(1, bowlDeficit / 2)
+    : 0;
   // Competition-aware urgency.
   const myShare = lotsLeft / Math.max(1, activeNeeders);
   const pressure = slotsNeeded / Math.max(0.5, myShare);
@@ -135,7 +147,7 @@ function valuation(team, p, v, lotsLeft, activeNeeders) {
   const criticalBoost = brokeAndNeedy
     ? Math.min(2.0, ((2.0 - avgPerSlot) / 2.0) * 3.0 * Math.min(1, minDeficit / 5))
     : 0;
-  const urgency = 1 + Math.max(0, pressure - 1.0) * 1.2 + desperation + criticalBoost + keeperBoost;
+  const urgency = 1 + Math.max(0, pressure - 1.0) * 1.2 + desperation + criticalBoost + keeperBoost + bowlBoost;
   const desire = Math.max(p.base, v * nm);
   // Budget discipline sets the baseline ceiling (warCap). Premium players (80+)
   // ADDITIONALLY draw bidding wars that push toward their per-game, hunger-noised
@@ -1850,17 +1862,23 @@ function PickXIScreen({ squad, onLock, teams = [], userTeamId }) {
   // Only require a keeper in the XI if the squad actually has one — otherwise a
   // keeperless squad would be soft-locked. No specialist keeper → a batter keeps.
   const squadHasKeeper = squad.some((p) => p.wk);
+  // Likewise, only require 5 bowling options in the XI if the squad can actually
+  // field 5 (specialist bowlers + all-rounders). A squad that over-invested in
+  // batting may physically have fewer — relax the hard block to a warning so the
+  // user is never soft-locked, exactly like the keeper fallback above.
+  const squadBowlOptions = squad.reduce((a, p) => a + (p.role === "Bowler" || p.role === "All-rounder" ? 1 : 0), 0);
 
   // Blocking requirements (must satisfy to lock) vs soft warnings.
   const blockers = [];
   if (lineup.length === 11 && roleCounts.WK === 0 && squadHasKeeper) blockers.push("Pick a wicket-keeper");
-  if (lineup.length === 11 && bowlOptions < 5)     blockers.push(`Need 5 bowling options (have ${bowlOptions})`);
+  if (lineup.length === 11 && bowlOptions < 5 && squadBowlOptions >= 5) blockers.push(`Need 5 bowling options (have ${bowlOptions})`);
   const canLock = lineup.length === 11 && !blockers.length;
 
   // Soft warnings (don't block).
   const warnings = [...blockers];
   if (!blockers.length && !squadHasKeeper && lineup.length === 11) warnings.push("No specialist keeper — a top-order batter will keep");
-  else if (!blockers.length && (roleCounts.WK + roleCounts.Batter) > 6) warnings.push("Heavy on pure batters");
+  if (!blockers.length && squadBowlOptions < 5 && lineup.length === 11) warnings.push(`Only ${squadBowlOptions} bowling options in your squad — XI will be light on bowling`);
+  if (!blockers.length && (roleCounts.WK + roleCounts.Batter) > 6) warnings.push("Heavy on pure batters");
 
   return (
     <div className="pickxi">
