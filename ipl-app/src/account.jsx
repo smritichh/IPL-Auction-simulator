@@ -59,63 +59,62 @@ async function fetchHistory() {
   return { rows: data || [], error };
 }
 
-// ── shared email → 6-digit code flow (used by both the modal and the full
-//    login page) so the Supabase calls live in exactly one place ──
-function useOtpFlow(onVerified) {
-  const [step, setStep]   = useState("email");   // email | code
+// localStorage key for the name typed at login. The magic-link click may land
+// in a different tab than the one that sent it, so we stash the name and apply
+// it once a session exists (see AccountBar) instead of relying on React state.
+const PENDING_NAME_KEY = "ipl_pending_name";
+
+// ── shared email → magic-link flow (used by both the modal and the full login
+//    page) so the Supabase calls live in exactly one place. Free-tier Supabase
+//    only sends a sign-in link (the OTP-code template is locked behind custom
+//    SMTP), so we use the link: send → user clicks it → supabase-js detects the
+//    session from the redirect URL and onAuthStateChange flips the app to
+//    logged-in. ──
+function useMagicLink() {
+  const [step, setStep]   = useState("email");   // email | sent
   const [name, setName]   = useState("");
   const [email, setEmail] = useState("");
-  const [code, setCode]   = useState("");
   const [busy, setBusy]   = useState(false);
   const [msg, setMsg]     = useState(null);      // { text, err }
 
-  const sendCode = async () => {
+  const send = async () => {
     const e = email.trim();
     if (!e) return;
     setBusy(true); setMsg(null);
-    // `data` sets user_metadata.name when the account is first created; we also
-    // re-apply it after verify (below) so returning users can update their name.
+    if (name.trim()) { try { localStorage.setItem(PENDING_NAME_KEY, name.trim()); } catch { /* ignore */ } }
+    // `data` sets user_metadata.name on account creation; emailRedirectTo brings
+    // the click back to this app, where supabase-js completes the sign-in.
     const { error } = await supabase.auth.signInWithOtp({
       email: e,
-      options: { shouldCreateUser: true, data: { name: name.trim() } },
+      options: {
+        shouldCreateUser: true,
+        emailRedirectTo: window.location.origin,
+        data: { name: name.trim() },
+      },
     });
     setBusy(false);
     if (error) { setMsg({ text: error.message, err: true }); return; }
-    setStep("code");
-    setMsg({ text: "Code sent — check your email (and spam).", err: false });
+    setStep("sent");
   };
 
-  const verify = async () => {
-    const t = code.trim();
-    if (!t) return;
-    setBusy(true); setMsg(null);
-    const { error } = await supabase.auth.verifyOtp({ email: email.trim(), token: t, type: "email" });
-    if (error) { setBusy(false); setMsg({ text: error.message, err: true }); return; }
-    // Session now exists → persist the name so it shows in the account chip
-    // (and updates it for returning users, where signInWithOtp's data is ignored).
-    if (name.trim()) await supabase.auth.updateUser({ data: { name: name.trim() } });
-    setBusy(false);
-    onVerified?.();   // onAuthStateChange also flips the app to logged-in
-  };
+  const back = () => { setStep("email"); setMsg(null); };
 
-  const back = () => { setStep("email"); setMsg(null); setCode(""); };
-
-  return { step, name, setName, email, setEmail, code, setCode, busy, msg, sendCode, verify, back };
+  return { step, name, setName, email, setEmail, busy, msg, send, back };
 }
 
 // ── login modal: email → 6-digit code → signed in ──
 function LoginModal({ onClose }) {
-  const { step, name, setName, email, setEmail, code, setCode, busy, msg, sendCode, verify, back } = useOtpFlow(onClose);
+  const { step, name, setName, email, setEmail, busy, msg, send, back } = useMagicLink();
 
   return (
     <div className="acct-ov" onClick={onClose}>
       <div className="acct-modal" onClick={(e) => e.stopPropagation()}>
         <button className="acct-x" onClick={onClose}>×</button>
-        <h2>{step === "email" ? "Log in" : "Enter your code"}</h2>
+        <h2>{step === "email" ? "Log in" : "Check your email"}</h2>
         <p className="sub">
           {step === "email"
-            ? "We’ll email you a one-time code — no password. Logging in lets you save your seasons."
-            : `Sent to ${email}. Enter the 6-digit code from the email.`}
+            ? "We’ll email you a sign-in link — no password. Logging in lets you save your seasons."
+            : `We sent a sign-in link to ${email}. Open it (same device) to finish logging in — you can close this once you do.`}
         </p>
 
         {step === "email" ? (
@@ -123,28 +122,17 @@ function LoginModal({ onClose }) {
             <input className="acct-field" type="text" autoFocus
               placeholder="Your name" value={name}
               onChange={(e) => setName(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && !busy && name.trim() && email.trim() && sendCode()} />
+              onKeyDown={(e) => e.key === "Enter" && !busy && name.trim() && email.trim() && send()} />
             <input className="acct-field" type="email" inputMode="email"
               placeholder="you@email.com" value={email}
               onChange={(e) => setEmail(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && !busy && name.trim() && email.trim() && sendCode()} />
-            <button className="acct-primary" disabled={busy || !name.trim() || !email.trim()} onClick={sendCode}>
-              {busy ? "Sending…" : "Send code"}
+              onKeyDown={(e) => e.key === "Enter" && !busy && name.trim() && email.trim() && send()} />
+            <button className="acct-primary" disabled={busy || !name.trim() || !email.trim()} onClick={send}>
+              {busy ? "Sending…" : "Email me a link"}
             </button>
           </>
         ) : (
-          <>
-            <input className="acct-field" inputMode="numeric" autoFocus
-              placeholder="123456" value={code}
-              onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-              onKeyDown={(e) => e.key === "Enter" && !busy && verify()} />
-            <button className="acct-primary" disabled={busy || code.length < 6} onClick={verify}>
-              {busy ? "Verifying…" : "Verify & log in"}
-            </button>
-            <button className="acct-back" onClick={back}>
-              ← Use a different email
-            </button>
-          </>
+          <button className="acct-back" onClick={back}>← Use a different email</button>
         )}
         {msg && <div className={`acct-msg${msg.err ? " err" : ""}`}>{msg.text}</div>}
       </div>
@@ -208,18 +196,18 @@ function HistoryModal({ onClose }) {
 //    On a successful login, onAuthStateChange flips the app past this page,
 //    so this component just unmounts — no explicit hand-off needed. ──
 export function LoginPage({ onGuest }) {
-  const { step, name, setName, email, setEmail, code, setCode, busy, msg, sendCode, verify, back } = useOtpFlow();
+  const { step, name, setName, email, setEmail, busy, msg, send, back } = useMagicLink();
 
   return (
     <div className="lp-wrap">
       <div className="lp-card">
         <div className="lp-icon"><Gavel size={28} strokeWidth={2.4} /></div>
         <div className="lp-brand">THE AUCTION</div>
-        <h1 className="lp-title">{step === "email" ? "Log in" : "Enter your code"}</h1>
+        <h1 className="lp-title">{step === "email" ? "Log in" : "Check your email"}</h1>
         <p className="lp-sub">
           {step === "email"
-            ? "We’ll email you a one-time code — no password. Logging in saves every season you finish to your history."
-            : `Sent to ${email}. Enter the 6-digit code from the email.`}
+            ? "We’ll email you a sign-in link — no password. Logging in saves every season you finish to your history."
+            : `We sent a sign-in link to ${email}. Open it on this device to finish logging in — you can close that email tab once you’re back here.`}
         </p>
 
         {step === "email" ? (
@@ -227,26 +215,17 @@ export function LoginPage({ onGuest }) {
             <input className="acct-field" type="text" autoFocus
               placeholder="Your name" value={name}
               onChange={(e) => setName(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && !busy && name.trim() && email.trim() && sendCode()} />
+              onKeyDown={(e) => e.key === "Enter" && !busy && name.trim() && email.trim() && send()} />
             <input className="acct-field" type="email" inputMode="email"
               placeholder="you@email.com" value={email}
               onChange={(e) => setEmail(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && !busy && name.trim() && email.trim() && sendCode()} />
-            <button className="acct-primary" disabled={busy || !name.trim() || !email.trim()} onClick={sendCode}>
-              {busy ? "Sending…" : "Send code"}
+              onKeyDown={(e) => e.key === "Enter" && !busy && name.trim() && email.trim() && send()} />
+            <button className="acct-primary" disabled={busy || !name.trim() || !email.trim()} onClick={send}>
+              {busy ? "Sending…" : "Email me a link"}
             </button>
           </>
         ) : (
-          <>
-            <input className="acct-field" inputMode="numeric" autoFocus
-              placeholder="123456" value={code}
-              onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-              onKeyDown={(e) => e.key === "Enter" && !busy && verify()} />
-            <button className="acct-primary" disabled={busy || code.length < 6} onClick={verify}>
-              {busy ? "Verifying…" : "Verify & log in"}
-            </button>
-            <button className="acct-back" onClick={back}>← Use a different email</button>
-          </>
+          <button className="acct-back" onClick={back}>← Use a different email</button>
         )}
         {msg && <div className={`acct-msg${msg.err ? " err" : ""}`}>{msg.text}</div>}
 
@@ -267,6 +246,21 @@ export function AccountBar() {
   const [menu, setMenu]   = useState(false);
 
   useEffect(() => { _openLogin = () => setLogin(true); return () => { _openLogin = () => {}; }; }, []);
+
+  // Apply the name stashed at login once a session exists (the magic-link click
+  // may have landed in a fresh tab without the login form's React state).
+  useEffect(() => {
+    if (!user) return;
+    let pending = null;
+    try { pending = localStorage.getItem(PENDING_NAME_KEY); } catch { /* ignore */ }
+    if (!pending) return;
+    if (user.user_metadata?.name) {
+      try { localStorage.removeItem(PENDING_NAME_KEY); } catch { /* ignore */ }
+      return;
+    }
+    supabase.auth.updateUser({ data: { name: pending } })
+      .finally(() => { try { localStorage.removeItem(PENDING_NAME_KEY); } catch { /* ignore */ } });
+  }, [user]);
 
   if (!authEnabled || !ready) return null;
 

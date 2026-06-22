@@ -12,10 +12,17 @@ Per-user data is protected by Postgres row-level security (RLS).
 
 ## How it behaves
 
-- A **"Log in"** chip sits in the top-right corner.
-- Click it → modal: enter email → **"Send code"** → enter the 6-digit code from
-  the email → logged in.
-- Logged-in users see their email + a menu (**My seasons**, **Log out**).
+- The app opens on a **full-screen login page**: enter **name + email** →
+  **"Email me a link"**, or **"Continue as guest"**. Either way you land on
+  team-select. A **"Log in"** chip also sits in the top-right (same flow in a
+  modal) for guests who decide to log in later.
+- **Magic-link sign-in** (not a typed code): clicking the link in the email
+  returns to the app and supabase-js completes the session. We use the link
+  because free-tier Supabase only sends its default sign-in-link template — the
+  OTP-code template is locked behind custom SMTP. The name typed at login is
+  stored in `user_metadata.name` (stashed in `localStorage` so it survives the
+  link opening a fresh tab) and shown, with a first-letter avatar, in the chip.
+- Logged-in users see their **name** + a menu (**My seasons**, **Log out**).
 - When a season finishes while logged in, it **auto-saves** to history. Guests see
   a "Log in to save this season" nudge on the finish screen; logging in then saves
   it automatically.
@@ -43,11 +50,16 @@ Dependency added: `@supabase/supabase-js` (in `ipl-app/package.json`).
 
 1. **Create a project** at https://supabase.com → New project.
 2. **Create the table**: SQL Editor → New query → paste `supabase/schema.sql` → Run.
-3. **Make the OTP email send a code**: Authentication → Emails → **Magic Link**
-   template → include `{{ .Token }}` (e.g. `Your login code: {{ .Token }}`).
-   Without this the email only has a magic *link*, not a 6-digit code.
+3. **Allow the redirect**: Authentication → **URL Configuration** → set **Site URL**
+   to the deployed URL and add both the deployed URL and `http://localhost:5173/**`
+   to **Redirect URLs**. The magic link must return to an allow-listed URL.
 4. **Get the keys**: Project Settings → API → copy the **Project URL** and the
    **anon public** key.
+
+> Sign-in uses the **magic link** (the email's default sign-in link), not a typed
+> code, because free-tier Supabase locks the OTP-code email template behind custom
+> SMTP. If you later add custom SMTP (e.g. Resend), you can edit the Magic Link
+> template to include `{{ .Token }}` and switch the UI back to a 6-digit code.
 
 ### The schema (`supabase/schema.sql`)
 
@@ -101,11 +113,14 @@ then redeploy.
 ## Auth flow (supabase-js v2)
 
 ```js
-// send the code
-await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: true } });
-// verify it
-await supabase.auth.verifyOtp({ email, token: code, type: "email" });
-// session
+// send the magic link (emailRedirectTo must be an allow-listed Redirect URL;
+// data.name seeds user_metadata.name on first sign-up)
+await supabase.auth.signInWithOtp({
+  email,
+  options: { shouldCreateUser: true, emailRedirectTo: window.location.origin, data: { name } },
+});
+// clicking the link returns here; supabase-js (detectSessionInUrl, default on)
+// completes the session — no verify step in the app
 supabase.auth.getSession();
 supabase.auth.onAuthStateChange((_event, session) => { /* user = session?.user */ });
 supabase.auth.signOut();
