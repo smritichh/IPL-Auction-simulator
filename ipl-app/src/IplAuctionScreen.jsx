@@ -4,6 +4,8 @@ import { PLAYERS } from "./players";
 import { pickXI, battingOrder, simulateMatch, innViews, oversFromBalls, teamStrength } from "./matchEngine";
 import { makeSchedule, emptyTable, applyResult, standings, nrrOf } from "./season";
 import { analyzeMatch } from "./matchDiagnostics";
+import { useAuth, saveSeason, openLogin } from "./account";
+import { authEnabled } from "./supabase";
 
 const OPEN_TIMER = 7;
 const BID_TIMER  = 4.5;
@@ -1685,6 +1687,31 @@ function FinishScreen({ position, userTeamId, championId, onRestart, projection,
     else { fallback(); flash(); }
   };
 
+  // Save this finished season to the logged-in user's history (once). Guests are
+  // nudged to log in; the save fires automatically once they do.
+  const { user, ready } = useAuth();
+  const [saveState, setSaveState] = useState("idle"); // idle|saving|saved|guest|error
+  const savedRef = useRef(false);
+  useEffect(() => {
+    if (!authEnabled || !ready) return;
+    if (savedRef.current) return;
+    if (!user) { setSaveState("guest"); return; }
+    savedRef.current = true;
+    setSaveState("saving");
+    saveSeason({
+      team: userTeamId,
+      team_name: ut.name,
+      final_pos: position,
+      projected_pos: proj.projPos,
+      title_odds: proj.titleOdds,
+      is_champion: isChamp,
+      champion: championId || null,
+      best_buy: best?.name || null,
+      worst_buy: worst?.name || null,
+    }).then(({ error, skipped }) => setSaveState(error ? "error" : skipped ? "guest" : "saved"));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, user]);
+
   return (
     <div className="champion">
       <div className="champ-badge" style={{ background: ut.color, color: ut.text }}>{ut.short}</div>
@@ -1708,6 +1735,19 @@ function FinishScreen({ position, userTeamId, championId, onRestart, projection,
           <div className="buy"><span className="buy-tag buy-worst">WORST BUY</span>{worst ? <span className="buy-txt"><b>{worst.name}</b> · {perfLine(worst.st)} · {cr(worst.price)}</span> : <span className="buy-txt">—</span>}</div>
         </div>
       </div>
+
+      {authEnabled && (
+        <div className="finish-save">
+          {saveState === "saving" && <span className="fs-muted">Saving to your history…</span>}
+          {saveState === "saved"  && <span className="fs-saved">✓ Saved to your history</span>}
+          {saveState === "error"  && <span className="fs-muted">Couldn’t save — make sure the history table is set up.</span>}
+          {saveState === "guest"  && (
+            <span className="fs-muted">
+              <button className="link-btn" onClick={openLogin}>Log in</button> to save this season to your history.
+            </span>
+          )}
+        </div>
+      )}
 
       <div className="finish-actions">
         <button className="bid-btn" onClick={saveImage}>📸 Save image</button>
@@ -2987,6 +3027,10 @@ const styles = `
 .buy-txt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .buy-txt b { color: #1B2436; }
 .finish-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 20px; }
+.finish-save { margin-top: 16px; text-align: center; }
+.fs-muted { font-size: 12.5px; color: #6B7488; }
+.fs-saved { font-size: 12.5px; color: #12A06A; font-weight: 700; }
+.link-btn { background: none; border: none; padding: 0; color: #B5800F; font-weight: 700; font-size: 12.5px; cursor: pointer; text-decoration: underline; }
 
 /* budget pace warning banner */
 .budget-warn {

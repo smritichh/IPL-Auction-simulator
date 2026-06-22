@@ -8,3 +8,4 @@ ipl-app/.shots/
 
 # Claude Code local permission state (machine-specific)
 .claude/settings.local.json
+.vercel
