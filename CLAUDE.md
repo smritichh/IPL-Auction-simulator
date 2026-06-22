@@ -41,6 +41,12 @@ is supporting material.
   with archetypes + ratings. Produced by the data pipeline below.
 - `ipl-app/src/{App.jsx,main.jsx,index.css}` — thin wrappers. `index.css` sets the
   light page background; the app is full-bleed (`.auc { min-height: 100vh }`).
+  `App.jsx` also hosts the **login gate** (see below).
+- `ipl-app/src/account.jsx` + `ipl-app/src/supabase.js` — **optional login + saved
+  history** (Supabase, client-side). `account.jsx` has `useAuth`, the magic-link
+  flow, the full-screen `LoginPage`, the top-right account chip, the history modal,
+  and `saveSeason`. `supabase.js` builds the client from `VITE_SUPABASE_*` env vars
+  and exposes `authEnabled` (false → app is pure-guest). See the **Login** section.
 
 ⚠️ **`/IplAuctionScreen.jsx` at the repo root is a STALE duplicate** (old copy).
 The live file is `ipl-app/src/IplAuctionScreen.jsx`. Don't edit the root one.
@@ -97,6 +103,29 @@ A team's max bid = squad-need × rating × budget-discipline, with these guards:
 - **criticalBoost / glut falloff** — broke-but-needy teams outbid hoarders on cheap
   fillers; teams at/above target stop running away to 25 players.
 
+## Login + saved history (optional, Supabase)
+
+Optional email login that only unlocks **saving finished seasons** — guests play
+the full game unchanged. Full details in `docs/login-feature.md`.
+
+- **Flow:** the app opens on a full-screen `LoginPage` (name + email → **magic
+  link**, or **Continue as guest**) → team select. A top-right chip offers the same
+  in a modal for guests who log in later. `App.jsx` gates: `authEnabled && !user &&
+  !guest` → `LoginPage`; logged-in users skip it; no Supabase configured → no gate.
+- **Magic link, not a typed code** — free-tier Supabase only sends its default
+  sign-in-**link** email (the OTP-code template is locked behind custom SMTP).
+  Clicking the link returns to `emailRedirectTo` (the app origin, which must be in
+  Supabase → Auth → **URL Configuration → Redirect URLs**) and supabase-js completes
+  the session. The name is stashed in `localStorage` (survives the link opening a
+  fresh tab) → applied to `user_metadata.name` once a session exists → shown with a
+  first-letter avatar in the chip.
+- **Config:** `ipl-app/.env.local` (gitignored) + the same two `VITE_SUPABASE_*`
+  vars in Vercel. The current Supabase project is **owned** (`rexczhofdgmabqmhkdhb`),
+  not the borrowed one referenced in older notes. Table + RLS: `supabase/schema.sql`.
+- **Saving** is best-effort: `FinishScreen` calls `saveSeason()` when logged in;
+  it no-ops for guests / when unconfigured. The anon key is public by design (RLS
+  protects rows) — never commit `service_role` or any secret.
+
 ## Conventions / gotchas
 
 - **Always `npm run build`** after editing the JSX (it's one big file; a stray tag
@@ -114,11 +143,16 @@ A team's max bid = squad-need × rating × budget-discipline, with these guards:
 ## Current state
 
 Full loop is playable, committed on `main`, **pushed to GitHub
-(`smritichh/IPL-Auction-simulator`) and auto-deployed on Vercel** (root dir
-`ipl-app`): team pick → auction → Pick XI (drag-drop + auto-pick, with a live
+(`smritichh/IPL-Auction-simulator`) and auto-deployed on Vercel**
+(https://ipl-auction-simulator-zeta.vercel.app, root dir `ipl-app`): optional
+login → team pick → auction → Pick XI (drag-drop + auto-pick, with a live
 BAT/BOWL/OVERALL strength readout) → 14-game league → playoffs (only your own
 knockouts play over-by-over; others auto-sim) → **finish screen** (final position,
 projected-vs-actual, title odds, best/worst buy, shareable PNG). Light full-bleed theme.
+
+**Optional login + saved history is live** (magic-link, Supabase) — see the
+**Login** section. `git push` to `main` uses the `smritichh` GitHub account; the
+Vercel env vars + Supabase project (`rexczhofdgmabqmhkdhb`) are configured for prod.
 
 The league screen has a **persistent team strip** (your strength + a live probable
 finish re-projected each match-day) and, **after a loss**, a "what went wrong"
