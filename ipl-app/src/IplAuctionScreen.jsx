@@ -6,6 +6,7 @@ import { makeSchedule, emptyTable, applyResult, standings, nrrOf } from "./seaso
 import { analyzeMatch } from "./matchDiagnostics";
 import { useAuth, saveSeason, openLogin } from "./account";
 import { authEnabled } from "./supabase";
+import { TEAMS } from "./teams";
 
 const OPEN_TIMER = 7;
 const BID_TIMER  = 4.5;
@@ -14,19 +15,6 @@ const P_AI       = 0.5;
 
 // `jump` = how often the franchise jump-bids to scare rivals off (personality).
 // RCB/PBKS are theatrical aggressors, DC/RR slow-play, the rest sit between.
-const TEAMS = [
-  { id: "MI",   name: "Mumbai Indians",              short: "MI",   color: "#1B6FCB", text: "#fff",    agg: 1.0,  jump: 0.30 },
-  { id: "CSK",  name: "Chennai Super Kings",         short: "CSK",  color: "#F4C430", text: "#10131C", agg: 1.0,  jump: 0.25 },
-  { id: "RCB",  name: "Royal Challengers Bengaluru", short: "RCB",  color: "#C8102E", text: "#fff",    agg: 1.12, jump: 0.52 },
-  { id: "KKR",  name: "Kolkata Knight Riders",       short: "KKR",  color: "#6A4C93", text: "#fff",    agg: 0.98, jump: 0.35 },
-  { id: "DC",   name: "Delhi Capitals",              short: "DC",   color: "#2E5EAA", text: "#fff",    agg: 0.92, jump: 0.16 },
-  { id: "SRH",  name: "Sunrisers Hyderabad",         short: "SRH",  color: "#FF7A1A", text: "#10131C", agg: 1.08, jump: 0.42 },
-  { id: "RR",   name: "Rajasthan Royals",            short: "RR",   color: "#E6308A", text: "#fff",    agg: 0.90, jump: 0.16 },
-  { id: "PBKS", name: "Punjab Kings",                short: "PBKS", color: "#D31329", text: "#fff",    agg: 1.10, jump: 0.48 },
-  { id: "GT",   name: "Gujarat Titans",              short: "GT",   color: "#C2A05A", text: "#10131C", agg: 1.0,  jump: 0.28 },
-  { id: "LSG",  name: "Lucknow Super Giants",        short: "LSG",  color: "#1FA2C4", text: "#10131C", agg: 1.03, jump: 0.33 },
-];
-
 // Pacing variance: marquee lots are slow theater, accelerated lots move fast.
 const openTimer = (p) => ({ Marquee: 10, Star: 8, Established: 7, Emerging: 6, Uncapped: 5 }[p.tier] ?? 7);
 const bidTimer  = (p) => (p.tier === "Marquee" ? 5.5 : BID_TIMER);
