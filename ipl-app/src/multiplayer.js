@@ -16,15 +16,17 @@ import { supabase } from "./supabase";
 // Lobby is carried in the Presence payload: { playerId, name, teamId, ready }.
 // Auction messages are Broadcast events (used from Stage 2 onward):
 export const EVENTS = {
+  // host → everyone: leave the lobby, enter the auction
+  START:       "start",        // { } (host broadcasts when everyone's ready)
   // player → host
-  BID_INTENT:  "bid_intent",   // { lotIndex, bidSeq }
+  BID_INTENT:  "bid_intent",   // { lotIndex, bidSeq, teamId }
   SKIP_INTENT: "skip_intent",  // { lotIndex }
   // host → everyone
-  LOT_OPEN:    "lot_open",     // { lotIndex, player, basePrice, deadlineTs, bidSeq }
-  STATE:       "state",        // { lotIndex, askingPrice, leaderId, bidSeq, deadlineTs }
-  SOLD:        "sold",         // { lotIndex, winnerId, price }
+  LOT_OPEN:    "lot_open",     // { lotIndex, total, playerIdx, asking, leaderId, bidSeq, duration, teams }
+  STATE:       "state",        // { lotIndex, asking, leaderId, bidSeq, duration }
+  SOLD:        "sold",         // { lotIndex, winnerId, price, teams }
   UNSOLD:      "unsold",       // { lotIndex }
-  AUCTION_DONE:"auction_done", // { squads }
+  AUCTION_DONE:"auction_done", // { teams }
   // host → a late/rejoining player (full resync)
   SNAPSHOT:    "snapshot",     // { ...authoritative game state }
 };

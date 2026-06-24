@@ -1,22 +1,21 @@
-// Multiplayer lobby (Stage 1): create or join a room by code, see who's here,
-// claim a distinct franchise, and ready up. Built on the Realtime presence in
-// multiplayer.js — no host authority needed for the lobby itself. The auction
-// handoff (host "Start") is wired in a later stage; here it's gated on everyone
-// being ready with a distinct team.
-import { useState } from "react";
+// Multiplayer lobby + room shell. A room is a Supabase Realtime channel named by
+// its share code; the lobby rides on Presence (no host authority). The Room
+// wrapper owns the single useRoom connection and the lobby→auction phase so the
+// channel persists across the handoff; the host broadcasting START flips every
+// client (including itself) into the auction.
+import { useState, useEffect } from "react";
 import { TEAMS } from "./teams";
-import { useRoom, genRoomCode, normalizeCode } from "./multiplayer";
+import { useRoom, genRoomCode, normalizeCode, EVENTS } from "./multiplayer";
+import { MultiplayerAuction } from "./MultiplayerAuction";
 
 // ── entry: choose create vs join, collect name + code, then mount the room ──
 export function MultiplayerEntry({ name: initialName, onExit }) {
   const [name, setName]   = useState(initialName || "");
-  const [code, setCode]   = useState(null);     // active room code (null until created/joined)
+  const [code, setCode]   = useState(null);
   const [isHost, setHost] = useState(false);
   const [joinCode, setJoinCode] = useState("");
 
-  if (code) {
-    return <Lobby code={code} name={name.trim() || "Player"} isHost={isHost} onLeave={() => setCode(null)} />;
-  }
+  if (code) return <Room code={code} name={name.trim() || "Player"} isHost={isHost} onLeave={() => setCode(null)} />;
 
   const create = () => { if (!name.trim()) return; setHost(true); setCode(genRoomCode()); };
   const join   = () => {
@@ -34,16 +33,13 @@ export function MultiplayerEntry({ name: initialName, onExit }) {
 
         <input className="acct-field" type="text" placeholder="Your name" value={name}
           onChange={(e) => setName(e.target.value)} maxLength={20} autoFocus />
-
         <button className="acct-primary" disabled={!name.trim()} onClick={create}>Create a room</button>
 
         <div className="lp-or"><span>or join</span></div>
         <input className="acct-field" type="text" placeholder="Enter code (e.g. 7KQ2P)"
           value={joinCode} onChange={(e) => setJoinCode(normalizeCode(e.target.value))}
           onKeyDown={(e) => e.key === "Enter" && join()} style={{ textTransform: "uppercase", letterSpacing: "2px" }} />
-        <button className="lp-guest" disabled={!name.trim() || normalizeCode(joinCode).length < 5} onClick={join}>
-          Join room
-        </button>
+        <button className="lp-guest" disabled={!name.trim() || normalizeCode(joinCode).length < 5} onClick={join}>Join room</button>
 
         <p className="lp-note"><button className="acct-back" onClick={onExit}>← Back</button></p>
         <style>{LOBBY_CSS}</style>
@@ -52,27 +48,39 @@ export function MultiplayerEntry({ name: initialName, onExit }) {
   );
 }
 
-// ── the room itself ──
-function Lobby({ code, name, isHost, onLeave }) {
-  const { status, members, self, claimTeam, setReady } = useRoom({ code, name, isHost });
+// ── room shell: one persistent connection, lobby ⇄ auction phase ──
+function Room({ code, name, isHost, onLeave }) {
+  const room = useRoom({ code, name, isHost });
+  const [phase, setPhase] = useState("lobby");
+  useEffect(() => {
+    const off = room.onEvent(EVENTS.START, () => setPhase("auction"));
+    return off;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  if (phase === "auction") return <MultiplayerAuction room={room} self={room.self} members={room.members} />;
+  return <LobbyView code={code} room={room} isHost={isHost} onLeave={onLeave} />;
+}
+
+// ── presentational lobby ──
+function LobbyView({ code, room, isHost, onLeave }) {
+  const { status, members, self, claimTeam, setReady, send } = room;
   const [copied, setCopied] = useState(false);
 
-  // team → the member who claimed it (for the grid + collision detection)
   const claimedBy = {};
   for (const m of members) if (m.teamId) claimedBy[m.teamId] = m;
 
-  const humans      = members.length;
+  const humans        = members.length;
   const everyoneReady = humans >= 2 && members.every((m) => m.ready && m.teamId);
-  const myTeam      = self.teamId;
+  const myTeam        = self.teamId;
 
   const copyCode = () => {
     try { navigator.clipboard?.writeText(code); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* ignore */ }
   };
-
   const pickTeam = (teamId) => {
     const owner = claimedBy[teamId];
-    if (owner && owner.playerId !== self.playerId) return; // taken by someone else
-    claimTeam(myTeam === teamId ? null : teamId);          // toggle off if re-tapping mine
+    if (owner && owner.playerId !== self.playerId) return;
+    claimTeam(myTeam === teamId ? null : teamId);
   };
 
   return (
@@ -88,7 +96,6 @@ function Lobby({ code, name, isHost, onLeave }) {
             : `${humans} player${humans === 1 ? "" : "s"} in the room${humans < 2 ? " · waiting for a friend to join…" : ""}`}
         </p>
 
-        {/* roster */}
         <div className="roster">
           {members.map((m) => {
             const t = TEAMS.find((x) => x.id === m.teamId);
@@ -102,7 +109,6 @@ function Lobby({ code, name, isHost, onLeave }) {
           })}
         </div>
 
-        {/* team claim grid */}
         <div className="lobby-label">Claim your franchise</div>
         <div className="team-picker">
           {TEAMS.map((t) => {
@@ -110,13 +116,10 @@ function Lobby({ code, name, isHost, onLeave }) {
             const mine  = owner?.playerId === self.playerId;
             const taken = owner && !mine;
             return (
-              <button key={t.id}
-                className={`tp-btn${mine ? " tp-sel" : ""}`}
-                disabled={taken}
+              <button key={t.id} className={`tp-btn${mine ? " tp-sel" : ""}`} disabled={taken}
                 title={taken ? `Taken by ${owner.name}` : t.name}
-                style={mine
-                  ? { background: t.color, color: t.text, borderColor: t.color }
-                  : { borderColor: `${t.color}44`, color: taken ? "#B7BECB" : t.color, opacity: taken ? 0.45 : 1 }}
+                style={mine ? { background: t.color, color: t.text, borderColor: t.color }
+                            : { borderColor: `${t.color}44`, color: taken ? "#B7BECB" : t.color, opacity: taken ? 0.45 : 1 }}
                 onClick={() => pickTeam(t.id)}>
                 <span className="tp-short">{t.short}</span>
               </button>
@@ -132,7 +135,7 @@ function Lobby({ code, name, isHost, onLeave }) {
         {isHost && (
           <button className="lp-guest" disabled={!everyoneReady}
             style={{ marginTop: 8, borderColor: everyoneReady ? "#B5800F" : undefined, color: everyoneReady ? "#B5800F" : undefined }}
-            onClick={() => alert("Auction start is wired in the next stage.")}>
+            onClick={() => send(EVENTS.START, {})}>
             {everyoneReady ? "Start the auction →" : "Waiting for all players to ready up"}
           </button>
         )}
